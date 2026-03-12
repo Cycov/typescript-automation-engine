@@ -1,0 +1,3026 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TypeScript Automation Engine</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --bg-secondary: #161b22;
+      --bg-tertiary: #1c2128;
+      --bg-input: #21262d;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text-dim: #8b949e;
+      --accent: #58a6ff;
+      --green: #3fb950;
+      --yellow: #d29922;
+      --red: #f85149;
+      --orange: #d18616;
+      --purple: #bc8cff;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      font-size: 13px;
+      overflow: hidden;
+    }
+
+    /* ─── Header ────────────────────────────────────── */
+    header {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-shrink: 0;
+      z-index: 100;
+    }
+    header h1 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent);
+      white-space: nowrap;
+    }
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--red);
+      flex-shrink: 0;
+    }
+    .status-dot.connected { background: var(--green); }
+    .toolbar {
+      display: flex;
+      gap: 6px;
+      margin-left: auto;
+    }
+    .btn {
+      background: var(--bg-input);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 4px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 11px;
+      white-space: nowrap;
+      transition: border-color 0.15s;
+    }
+    .btn:hover { border-color: var(--accent); }
+    .btn-reload {
+      background: #2d1b00;
+      border-color: var(--orange);
+      color: var(--orange);
+    }
+    .btn-reload:hover { background: #3d2500; }
+    .reload-badge {
+      display: inline-block;
+      background: var(--orange);
+      color: #000;
+      font-size: 9px;
+      font-weight: 700;
+      min-width: 14px;
+      height: 14px;
+      line-height: 14px;
+      text-align: center;
+      border-radius: 7px;
+      padding: 0 3px;
+      margin-left: 4px;
+      vertical-align: middle;
+    }
+    .btn-danger { border-color: var(--red); color: var(--red); }
+    .btn-danger:hover { background: #2d0000; }
+    .btn-accent { border-color: var(--accent); color: var(--accent); }
+
+    /* ─── Layout ────────────────────────────────────── */
+    .main-layout {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ─── Left Sidebar ──────────────────────────────── */
+    .sidebar {
+      width: 260px;
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .sidebar-section {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 60px;
+    }
+    .sidebar-resize {
+      height: 4px;
+      cursor: row-resize;
+      background: transparent;
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+    .sidebar-resize:hover { background: var(--accent); }
+    .sidebar-header {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      padding: 10px 12px 6px;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .sidebar-header .badge {
+      background: var(--bg-input);
+      border-radius: 8px;
+      padding: 1px 6px;
+      font-size: 10px;
+    }
+
+    /* Automations list */
+    .automation-list {
+      overflow-y: auto;
+      flex: 1;
+      padding: 4px 8px 8px;
+    }
+    .automation-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.1s;
+      margin-bottom: 2px;
+    }
+    .automation-item:hover { background: var(--bg-input); }
+    .automation-item .state-indicator {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .automation-item .state-indicator.running { background: var(--green); }
+    .automation-item .state-indicator.stopped { background: var(--text-dim); }
+    .automation-item .state-indicator.error { background: var(--red); }
+    .automation-item .auto-name {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 12px;
+    }
+    .automation-item .auto-state {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+    .automation-item .auto-actions {
+      display: flex;
+      gap: 4px;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .automation-item:hover .auto-actions { opacity: 1; }
+    .auto-actions .btn {
+      padding: 2px 6px;
+      font-size: 10px;
+    }
+
+    /* File tree */
+    .file-tree {
+      overflow-y: auto;
+      flex: 1;
+      padding: 4px 8px 8px;
+    }
+    .file-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: background 0.1s;
+    }
+    .file-item:hover { background: var(--bg-input); }
+    .file-item.active { background: var(--bg-input); color: var(--accent); }
+    .file-item.selected { background: var(--bg-input); outline: 1px solid var(--accent); }
+    .file-item.drag-over { background: rgba(88, 166, 255, 0.15); outline: 1px dashed var(--accent); }
+    .file-item .icon { color: var(--text-dim); font-size: 11px; width: 14px; text-align: center; }
+    .file-item.directory .icon { color: var(--yellow); }
+    .file-item .file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-item .file-delete {
+      opacity: 0;
+      color: var(--text-dim);
+      font-size: 13px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0 3px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+    .file-item:hover .file-delete { opacity: 1; }
+    .file-item .file-delete:hover { color: var(--red); background: var(--bg-input); }
+    .file-item .rename-input {
+      flex: 1;
+      background: var(--bg-input);
+      color: var(--text);
+      border: 1px solid var(--accent);
+      border-radius: 2px;
+      padding: 0 4px;
+      font-family: inherit;
+      font-size: 12px;
+      outline: none;
+    }
+    .file-children { padding-left: 12px; }
+    .file-children.drag-over { background: rgba(88, 166, 255, 0.08); }
+
+    /* ─── Center Panel ──────────────────────────────── */
+    .center-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Tab bar */
+    .tab-bar {
+      display: flex;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+      scrollbar-width: thin;
+      flex-shrink: 0;
+    }
+    .tab-bar:empty { display: none; }
+    .tab {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-right: 1px solid var(--border);
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--text-dim);
+      white-space: nowrap;
+      transition: color 0.1s, background 0.1s;
+      flex-shrink: 0;
+    }
+    .tab:hover { color: var(--text); background: var(--bg-tertiary); }
+    .tab.active {
+      color: var(--text);
+      background: var(--bg);
+      border-bottom: 2px solid var(--accent);
+    }
+    .tab .modified { color: var(--orange); margin-left: 2px; }
+    .tab .close-tab {
+      opacity: 0;
+      font-size: 14px;
+      line-height: 1;
+      color: var(--text-dim);
+      cursor: pointer;
+      padding: 0 2px;
+      border-radius: 2px;
+    }
+    .tab:hover .close-tab { opacity: 1; }
+    .tab .close-tab:hover { color: var(--text); background: var(--bg-input); }
+
+    /* Editor container */
+    .editor-container {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+    .editor-welcome {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-dim);
+      font-size: 14px;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .editor-welcome .hint { font-size: 12px; }
+
+    /* ─── Bottom Panel (Logs) ───────────────────────── */
+    .bottom-panel {
+      height: 280px;
+      background: var(--bg);
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    .bottom-panel-header {
+      display: flex;
+      align-items: center;
+      padding: 4px 12px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      gap: 8px;
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+    .bottom-panel-header .panel-tabs {
+      display: flex;
+      gap: 0;
+    }
+    .panel-tab {
+      padding: 4px 12px;
+      cursor: pointer;
+      color: var(--text-dim);
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .panel-tab:hover { color: var(--text); }
+    .panel-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+    .log-filters {
+      display: flex;
+      gap: 4px;
+      margin-left: auto;
+    }
+    .log-filters select {
+      background: var(--bg-input);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-family: inherit;
+      font-size: 11px;
+    }
+    .log-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 0;
+      font-size: 12px;
+    }
+    .log-entry {
+      padding: 1px 12px;
+      display: flex;
+      gap: 8px;
+      line-height: 1.6;
+    }
+    .log-entry:hover { background: var(--bg-secondary); }
+    .log-time { color: var(--text-dim); flex-shrink: 0; font-size: 11px; }
+    .log-level { width: 44px; text-align: right; flex-shrink: 0; font-size: 11px; font-weight: 600; }
+    .log-level.debug { color: var(--text-dim); }
+    .log-level.info { color: var(--accent); }
+    .log-level.warn { color: var(--yellow); }
+    .log-level.error { color: var(--red); }
+    .log-source { color: var(--purple); flex-shrink: 0; min-width: 80px; font-size: 11px; }
+    .log-message { flex: 1; word-break: break-word; }
+    .log-extra { color: var(--text-dim); font-size: 11px; }
+    .log-object {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 8px;
+      margin-top: 2px;
+      font-size: 11px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text-dim);
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    /* ─── Resize handle ─────────────────────────────── */
+    .resize-handle {
+      height: 4px;
+      cursor: row-resize;
+      background: transparent;
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+    .resize-handle:hover { background: var(--accent); }
+
+    /* ─── Dialogs ───────────────────────────────────── */
+    .dialog-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+    }
+    .dialog-overlay.active { display: flex; }
+    .dialog {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      min-width: 360px;
+      max-width: 600px;
+    }
+    .dialog h3 {
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+    .dialog p {
+      margin-bottom: 16px;
+      color: var(--text-dim);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .dialog .dialog-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    .dialog textarea {
+      width: 100%;
+      min-height: 200px;
+      background: var(--bg-input);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 8px 10px;
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 12px;
+      resize: vertical;
+      outline: none;
+      margin-bottom: 8px;
+    }
+    .dialog textarea:focus { border-color: var(--accent); }
+    .dialog input[type="text"] {
+      width: 100%;
+      background: var(--bg-input);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 13px;
+      margin-bottom: 8px;
+      outline: none;
+    }
+    .dialog input[type="text"]:focus { border-color: var(--accent); }
+    .dialog .result-preview {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 8px 10px;
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 300px;
+      overflow-y: auto;
+      margin-bottom: 12px;
+      color: var(--text-dim);
+    }
+
+
+    /* ─── Empty state ───────────────────────────────── */
+    .empty-state {
+      padding: 20px;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 12px;
+    }
+
+    /* ─── Terminal ───────────────────────────────────── */
+    .terminal-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .terminal-output {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+    }
+    .terminal-welcome {
+      color: var(--text-dim);
+      margin-bottom: 8px;
+      line-height: 1.6;
+    }
+    .terminal-entry { margin-bottom: 6px; }
+    .terminal-cmd { color: var(--accent); }
+    .terminal-cmd::before { content: '❯ '; color: var(--green); }
+    .terminal-result { color: var(--text-dim); white-space: pre-wrap; word-break: break-word; margin-top: 2px; }
+    .terminal-result.error { color: var(--red); }
+    .terminal-input-wrap {
+      display: flex;
+      align-items: center;
+      padding: 4px 12px 8px;
+      gap: 6px;
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border);
+      position: relative;
+    }
+    .terminal-prompt { color: var(--green); font-size: 12px; flex-shrink: 0; }
+    .terminal-input {
+      flex: 1;
+      background: var(--bg-input);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 5px 8px;
+      border-radius: 4px;
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 12px;
+      outline: none;
+    }
+    .terminal-input:focus { border-color: var(--accent); }
+    .autocomplete-popup {
+      display: none;
+      position: absolute;
+      bottom: 100%;
+      left: 24px;
+      right: 12px;
+      max-height: 220px;
+      overflow-y: auto;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      box-shadow: 0 -4px 16px rgba(0,0,0,0.4);
+      z-index: 300;
+      padding: 4px 0;
+    }
+    .autocomplete-popup.active { display: block; }
+    .ac-item {
+      padding: 4px 10px;
+      cursor: pointer;
+      font-size: 12px;
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ac-item:hover, .ac-item.selected { background: var(--bg-input); }
+    .ac-item .ac-label { flex: 1; color: var(--text); }
+    .ac-item .ac-hint { color: var(--text-dim); font-size: 10px; }
+    .ac-item .ac-type {
+      font-size: 9px;
+      padding: 1px 5px;
+      border-radius: 3px;
+      background: var(--bg-tertiary);
+      color: var(--text-dim);
+    }
+    .ac-separator {
+      padding: 3px 10px 2px;
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-top: 1px solid var(--border);
+      margin-top: 2px;
+    }
+    .ac-separator:first-child { border-top: none; margin-top: 0; }
+
+    /* ─── Storage viewer ────────────────────────────── */
+    .storage-list {
+      overflow-y: auto;
+      flex: 1;
+      padding: 4px 8px 8px;
+      font-size: 11px;
+    }
+    .storage-ns {
+      margin-bottom: 6px;
+    }
+    .storage-ns-header {
+      font-size: 10px;
+      color: var(--accent);
+      padding: 2px 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .storage-ns-header:hover { background: var(--bg-input); border-radius: 3px; }
+    .storage-ns-header .icon { color: var(--text-dim); font-size: 9px; width: 10px; }
+    .storage-entries {
+      padding-left: 12px;
+    }
+    .storage-entry {
+      display: flex;
+      gap: 4px;
+      padding: 1px 4px;
+      line-height: 1.5;
+      border-radius: 2px;
+    }
+    .storage-entry:hover { background: var(--bg-input); }
+    .storage-key {
+      color: var(--yellow);
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    .storage-val {
+      color: var(--text-dim);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .storage-type-label {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-dim);
+      padding: 4px 4px 2px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 2px;
+    }
+    .storage-empty {
+      color: var(--text-dim);
+      font-size: 11px;
+      padding: 4px;
+      font-style: italic;
+    }
+
+    /* ─── Auto-scroll button ────────────────────────── */
+    .autoscroll-btn {
+      background: var(--bg-input);
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      padding: 1px 8px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 10px;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .autoscroll-btn:hover { border-color: var(--accent); color: var(--text); }
+    .autoscroll-btn.active { background: rgba(88, 166, 255, 0.15); border-color: var(--accent); color: var(--accent); }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <h1>⚡ TAE</h1>
+    <div class="status">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Connecting...</span>
+    </div>
+    <div class="toolbar">
+      <button class="btn" onclick="showExportDialog()">Export</button>
+      <button class="btn" onclick="showYamlToTsDialog()" title="Convert YAML attributes to TypeScript interface">YAML→TS</button>
+      <button class="btn" onclick="showImportDialog()">Import</button>
+      <button class="btn" onclick="showAiDialog()" title="Export entities/devices and SKILL.md for AI editing">Work with AI</button>
+      <button class="btn" onclick="clearLogs()">Clear Logs</button>
+      <button class="btn btn-reload" onclick="reload()" id="reloadBtn">⟳ Reload</button>
+    </div>
+  </header>
+
+  <div class="main-layout">
+    <!-- Left Sidebar -->
+    <div class="sidebar" id="sidebar">
+      <!-- Automations -->
+      <div class="sidebar-section" id="sidebarAutomations" style="flex: 1;">
+        <div class="sidebar-header">
+          Automations <span class="badge" id="autoCount">0</span>
+        </div>
+        <div class="automation-list" id="automationList">
+          <div class="empty-state">No automations loaded</div>
+        </div>
+      </div>
+
+      <div class="sidebar-resize" data-above="sidebarAutomations" data-below="sidebarFiles"></div>
+
+      <!-- Files -->
+      <div class="sidebar-section" id="sidebarFiles" style="flex: 1;">
+        <div class="sidebar-header">
+          Files
+          <div style="display:flex; gap:4px;">
+            <button class="btn" style="padding: 1px 6px; font-size: 10px;" onclick="createNewFile()" title="New File">+📄</button>
+            <button class="btn" style="padding: 1px 6px; font-size: 10px;" onclick="createNewFolder()" title="New Folder">+📁</button>
+            <button class="btn" style="padding: 1px 6px; font-size: 10px;" onclick="refreshFiles()">↻</button>
+          </div>
+        </div>
+        <div class="file-tree" id="fileTree" tabindex="0">
+          <div class="empty-state">Loading...</div>
+        </div>
+      </div>
+
+      <div class="sidebar-resize" data-above="sidebarFiles" data-below="sidebarStorage"></div>
+
+      <!-- Storage -->
+      <div class="sidebar-section" id="sidebarStorage" style="flex: 0.6;">
+        <div class="sidebar-header">
+          Storage
+          <button class="btn" style="padding: 1px 6px; font-size: 10px;" onclick="refreshStorage()" title="Refresh storage">↻</button>
+        </div>
+        <div class="storage-list" id="storageList">
+          <div class="storage-empty">No storage data</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center: Editor + Logs -->
+    <div class="center-panel">
+      <!-- Tab bar -->
+      <div class="tab-bar" id="tabBar"></div>
+
+      <!-- Editor area -->
+      <div class="editor-container" id="editorContainer">
+        <div class="editor-welcome">
+          <div>TypeScript Automation Engine</div>
+          <div class="hint">Select a file from the sidebar to begin editing</div>
+        </div>
+      </div>
+
+      <!-- Resize handle -->
+      <div class="resize-handle" id="resizeHandle"></div>
+
+      <!-- Bottom panel -->
+      <div class="bottom-panel" id="bottomPanel">
+        <div class="bottom-panel-header">
+          <div class="panel-tabs">
+            <div class="panel-tab active" data-panel="logs" onclick="switchPanel('logs')">Output</div>
+            <div class="panel-tab" data-panel="terminal" onclick="switchPanel('terminal')">Terminal</div>
+          </div>
+          <div class="log-filters" id="logFilters">
+            <button class="autoscroll-btn active" id="autoscrollBtn" onclick="toggleAutoScroll()" title="Auto-scroll to latest log">⤓ Auto</button>
+            <select id="logLevelFilter" onchange="applyLogFilter()">
+              <option value="all">All Levels</option>
+              <option value="debug">Debug</option>
+              <option value="info">Info</option>
+              <option value="warn">Warn</option>
+              <option value="error">Error</option>
+            </select>
+            <select id="logSourceFilter" onchange="applyLogFilter()">
+              <option value="all">All Sources</option>
+            </select>
+          </div>
+        </div>
+        <div class="log-area" id="logArea"></div>
+        <div class="terminal-area" id="terminalArea" style="display:none;">
+          <div class="terminal-output" id="terminalOutput">
+            <div class="terminal-welcome">TAE Terminal — call Home Assistant functions directly<br>Type a command or press Tab for suggestions. Try: callService('light', 'turn_on', { entity_id: 'light.bedroom' })</div>
+          </div>
+          <div class="terminal-input-wrap">
+            <span class="terminal-prompt">❯</span>
+            <input type="text" id="terminalInput" class="terminal-input" spellcheck="false"
+                   autocomplete="off" placeholder="Type 'help' for help"
+                   onkeydown="handleTerminalKey(event)" oninput="handleTerminalInput(event)" />
+            <div class="autocomplete-popup" id="autocompletePopup"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import confirmation dialog -->
+  <div class="dialog-overlay" id="importDialog">
+    <div class="dialog">
+      <h3>⚠ Import from Sync</h3>
+      <p>
+        This will import files from the external sync path and overwrite existing automations.
+        No validation is performed. Make sure you know what you're importing.
+      </p>
+      <div class="dialog-actions">
+        <button class="btn" onclick="closeImportDialog()">Cancel</button>
+        <button class="btn btn-danger" onclick="confirmImport()">Import & Overwrite</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete confirmation dialog -->
+  <div class="dialog-overlay" id="deleteDialog">
+    <div class="dialog">
+      <h3>⚠ Delete File</h3>
+      <p id="deleteDialogText">Are you sure you want to delete this file?</p>
+      <div class="dialog-actions">
+        <button class="btn" onclick="closeDeleteDialog()">Cancel</button>
+        <button class="btn btn-danger" onclick="confirmDelete()">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- New file/folder dialog -->
+  <div class="dialog-overlay" id="newFileDialog">
+    <div class="dialog">
+      <h3 id="newFileDialogTitle">New File</h3>
+      <p>Enter a name:</p>
+      <input type="text" id="newFileNameInput" style="width:100%; background:var(--bg-input); color:var(--text); border:1px solid var(--border); padding:6px 10px; border-radius:4px; font-family:inherit; font-size:13px; margin-bottom:16px; outline:none;" />
+      <div class="dialog-actions">
+        <button class="btn" onclick="closeNewFileDialog()">Cancel</button>
+        <button class="btn btn-accent" onclick="confirmNewFile()">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Export confirmation dialog -->
+  <div class="dialog-overlay" id="exportDialog">
+    <div class="dialog">
+      <h3>⚠ Export to Sync</h3>
+      <p>
+        This will overwrite everything at the sync path with the current automation files.
+        Any files previously at the sync path will be replaced.
+      </p>
+      <div class="dialog-actions">
+        <button class="btn" onclick="closeExportDialog()">Cancel</button>
+        <button class="btn btn-danger" onclick="confirmExport()">Export & Overwrite</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Unsaved changes dialog -->
+  <div class="dialog-overlay" id="unsavedDialog">
+    <div class="dialog">
+      <h3>⚠ Unsaved Changes</h3>
+      <p id="unsavedDialogText">This file has unsaved changes. Close without saving?</p>
+      <div class="dialog-actions">
+        <button class="btn" onclick="cancelCloseUnsaved()">Cancel</button>
+        <button class="btn btn-accent" onclick="saveAndCloseUnsaved()">Save & Close</button>
+        <button class="btn btn-danger" onclick="discardAndCloseUnsaved()">Discard</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reload with unsaved files dialog -->
+  <div class="dialog-overlay" id="reloadDialog">
+    <div class="dialog">
+      <h3>⚠ Unsaved Changes</h3>
+      <p id="reloadDialogText">You have unsaved files. What would you like to do?</p>
+      <div class="dialog-actions">
+        <button class="btn" onclick="cancelReloadDialog()">Cancel</button>
+        <button class="btn btn-accent" onclick="reloadSaveAndReload()">Save & Reload</button>
+        <button class="btn btn-danger" onclick="reloadWithoutSaving()">Reload without Saving</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- YAML to TypeScript interface dialog -->
+  <div class="dialog-overlay" id="yamlToTsDialog">
+    <div class="dialog" style="min-width: 500px;">
+      <h3>YAML → TypeScript Interface</h3>
+      <p>Paste YAML attributes (e.g. from HA Developer Tools → States) to generate a TypeScript interface.</p>
+      <input type="text" id="yamlInterfaceName" placeholder="Interface name (e.g. LightAttributes)" />
+      <textarea id="yamlInput" placeholder="Paste YAML here...
+min_color_temp_kelvin: 2000
+max_color_temp_kelvin: 6535
+brightness: 76
+friendly_name: My Light
+supported_features: 40"></textarea>
+      <div id="yamlPreview" class="result-preview" style="display:none;"></div>
+      <div class="dialog-actions">
+        <button class="btn" onclick="closeYamlToTsDialog()">Cancel</button>
+        <button class="btn btn-accent" onclick="generateYamlPreview()">Generate</button>
+        <button class="btn btn-accent" id="yamlCopyBtn" style="display:none;" onclick="copyYamlResult()">Copy to Clipboard</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Work with AI dialog -->
+  <div class="dialog-overlay" id="aiDialog">
+    <div class="dialog" style="min-width: 480px;">
+      <h3>🤖 Work with AI</h3>
+      <p>Export context files for use with AI assistants when writing automations.</p>
+      <div style="display: flex; flex-direction: column; gap: 12px; margin: 16px 0;">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 10px; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border);">
+          <div style="flex: 1;">
+            <div style="font-weight: 600; font-size: 13px;">Entities &amp; Devices</div>
+            <div style="font-size: 11px; color: var(--text-dim); margin-top: 2px;">All Home Assistant entities with friendly names, states, and domains</div>
+          </div>
+          <button class="btn btn-accent" onclick="downloadEntities()" id="aiEntitiesBtn">Download .txt</button>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px; padding: 10px; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border);">
+          <div style="flex: 1;">
+            <div style="font-weight: 600; font-size: 13px;">SKILL.md</div>
+            <div style="font-size: 11px; color: var(--text-dim); margin-top: 2px;">TAE automation skill file — API reference, patterns, and templates</div>
+          </div>
+          <button class="btn btn-accent" onclick="downloadSkillFile()" id="aiSkillBtn">Download .md</button>
+        </div>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn" onclick="closeAiDialog()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Monaco Editor CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.47.0/min/vs/loader.js"></script>
+
+  <script>
+    // ─── State ──────────────────────────────────────
+    let ws = null;
+    let connected = false;
+    let monacoEditor = null;
+    let monacoReady = false;
+    const openTabs = new Map(); // path → { content, model, modified, viewState }
+    const changedSinceReload = new Set(); // files saved to disk since last reload
+    let activeTab = null;
+    let automations = [];
+    let allLogs = [];
+    let logSources = new Set();
+    let selectedFilePath = null;
+    let currentFiles = [];
+    let pendingDeletePath = null;
+    let newFileIsDirectory = false;
+    let pendingEntitiesDownload = false;
+    let autoScrollLocked = true;
+    let storageRefreshTimer = null;
+
+    // ─── WebSocket ──────────────────────────────────
+    function connectWS() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${proto}//${location.host}${getBasePath()}/ws`;
+
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        connected = true;
+        updateStatus(true);
+        ws.send(JSON.stringify({ type: 'get_automations' }));
+        ws.send(JSON.stringify({ type: 'get_logs', count: 1000 }));
+        ws.send(JSON.stringify({ type: 'get_files' }));
+        ws.send(JSON.stringify({ type: 'get_all_entities' }));
+        ws.send(JSON.stringify({ type: 'get_storage' }));
+        startStoragePolling();
+      };
+
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        handleMessage(msg);
+      };
+
+      ws.onclose = () => {
+        connected = false;
+        updateStatus(false);
+        setTimeout(connectWS, 3000);
+      };
+
+      ws.onerror = () => {};
+    }
+
+    function getBasePath() {
+      // Detect HA ingress path from current URL
+      const path = location.pathname;
+      const ingressMatch = path.match(/^(\/api\/hassio_ingress\/[^/]+)/);
+      return ingressMatch ? ingressMatch[1] : '';
+    }
+
+    function handleMessage(msg) {
+      switch (msg.type) {
+        case 'automations':
+          automations = msg.data || [];
+          renderAutomations();
+          break;
+        case 'logs':
+          allLogs = msg.data || [];
+          for (const l of allLogs) logSources.add(l.source);
+          updateSourceFilter();
+          renderLogs();
+          break;
+        case 'log_entry':
+          allLogs.push(msg.data);
+          if (allLogs.length > 5000) allLogs = allLogs.slice(-5000);
+          logSources.add(msg.data.source);
+          updateSourceFilter();
+          renderLogEntry(msg.data);
+          break;
+        case 'files':
+          renderFileTree(msg.data);
+          preloadAllTsFiles();
+          break;
+        case 'all_file_contents':
+          handleAllFileContents(msg.data || []);
+          break;
+        case 'file_content':
+          openFile(msg.path, msg.content);
+          break;
+        case 'file_saved':
+          markTabSaved(msg.path);
+          break;
+        case 'file_created':
+          refreshFiles();
+          break;
+        case 'file_deleted':
+          closeTab(msg.path);
+          refreshFiles();
+          break;
+        case 'file_renamed':
+          // If the old path had an open tab, re-open it under the new path
+          if (openTabs.has(msg.oldPath)) {
+            const tabInfo = openTabs.get(msg.oldPath);
+            const content = tabInfo.model.getValue();
+            closeTab(msg.oldPath);
+            // File tree will refresh from the broadcast, request the file to open it
+            send({ type: 'read_file', path: msg.newPath });
+          }
+          refreshFiles();
+          break;
+        case 'reload_ack':
+          if (msg.success) {
+            changedSinceReload.clear();
+            updateReloadBadge();
+            addLocalLog('info', 'ui', 'Reload completed successfully');
+          } else {
+            addLocalLog('error', 'ui', `Reload failed: ${msg.error}`);
+          }
+          break;
+        case 'sync_result':
+          const count = msg.exported || msg.imported || 0;
+          addLocalLog('info', 'ui', `${msg.action}: ${count} file(s)`);
+          if (msg.action === 'import') refreshFiles();
+          break;
+        case 'all_entities':
+          // Cache for terminal autocomplete
+          cachedEntityIds = (msg.data || []).map(e => ({
+            id: e.entity_id,
+            name: e.attributes?.friendly_name || '',
+          }));
+          // Only trigger download if the AI dialog is open and user clicked download
+          if (pendingEntitiesDownload) {
+            pendingEntitiesDownload = false;
+            handleEntitiesDownload(msg.data || []);
+          }
+          break;
+        case 'skill_file':
+          handleSkillDownload(msg.data || '');
+          break;
+        case 'exec_result':
+          handleExecResult(msg);
+          break;
+        case 'storage_data':
+          renderStorageViewer(msg.persistent, msg.temp);
+          break;
+        case 'error':
+          addLocalLog('error', 'ui', msg.message);
+          break;
+      }
+    }
+
+    function send(msg) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(msg));
+      }
+    }
+
+    // ─── Status ─────────────────────────────────────
+    function updateStatus(isConnected) {
+      const dot = document.getElementById('statusDot');
+      const text = document.getElementById('statusText');
+      dot.className = 'status-dot' + (isConnected ? ' connected' : '');
+      text.textContent = isConnected ? 'Connected' : 'Disconnected';
+    }
+
+    // ─── Automations ────────────────────────────────
+    function renderAutomations() {
+      const list = document.getElementById('automationList');
+      document.getElementById('autoCount').textContent = automations.length;
+
+      if (automations.length === 0) {
+        list.innerHTML = '<div class="empty-state">No automations loaded</div>';
+        return;
+      }
+
+      list.innerHTML = automations.map(a => `
+        <div class="automation-item" title="${a.id} (${a.className})\nState: ${a.state}${a.error ? '\nError: ' + a.error : ''}">
+          <div class="state-indicator ${a.state}"></div>
+          <span class="auto-name">${a.id}</span>
+          <span class="auto-state">${a.state}</span>
+          <div class="auto-actions">
+            ${a.state === 'running'
+              ? `<button class="btn" onclick="stopAuto('${a.id}')">Stop</button>`
+              : `<button class="btn btn-accent" onclick="startAuto('${a.id}')">Start</button>`
+            }
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function startAuto(id) {
+      send({ type: 'start_automation', automationId: id });
+    }
+
+    function stopAuto(id) {
+      send({ type: 'stop_automation', automationId: id });
+    }
+
+    // ─── File Tree ──────────────────────────────────
+    function renderFileTree(files) {
+      currentFiles = files || [];
+      const tree = document.getElementById('fileTree');
+      if (!currentFiles.length) {
+        tree.innerHTML = '<div class="empty-state">No files</div>';
+        return;
+      }
+      tree.innerHTML = renderFileItems(currentFiles, '');
+    }
+
+    function renderFileItems(items, parentPath) {
+      return items.map(item => {
+        const itemPath = item.path;
+        if (item.isDirectory) {
+          return `
+            <div>
+              <div class="file-item directory${selectedFilePath === itemPath ? ' selected' : ''}"
+                   onclick="selectFile('${escapeAttr(itemPath)}', true, event)"
+                   ondblclick="startRename('${escapeAttr(itemPath)}', '${escapeAttr(item.name)}', true, event)"
+                   ondragover="onDragOver(event, this)"
+                   ondragleave="onDragLeave(event, this)"
+                   ondrop="onDrop(event, '${escapeAttr(itemPath)}')">
+                <span class="icon">▸</span>
+                <span class="file-name">${escapeHtml(item.name)}</span>
+                <span class="file-delete" onclick="event.stopPropagation(); showDeleteDialog('${escapeAttr(itemPath)}')" title="Delete">✕</span>
+              </div>
+              <div class="file-children"
+                   style="display:none;"
+                   ondragover="onDragOverChildren(event, this)"
+                   ondragleave="onDragLeaveChildren(event, this)"
+                   ondrop="onDropChildren(event, '${escapeAttr(itemPath)}')">
+                ${item.children ? renderFileItems(item.children, itemPath) : ''}
+              </div>
+            </div>`;
+        } else {
+          const isActive = activeTab === itemPath;
+          const isSelected = selectedFilePath === itemPath;
+          return `
+            <div class="file-item${isActive ? ' active' : ''}${isSelected ? ' selected' : ''}"
+                 draggable="true"
+                 onclick="selectFile('${escapeAttr(itemPath)}', false, event)"
+                 ondblclick="startRename('${escapeAttr(itemPath)}', '${escapeAttr(item.name)}', false, event)"
+                 ondragstart="onDragStart(event, '${escapeAttr(itemPath)}')">
+              <span class="icon">📄</span>
+              <span class="file-name">${escapeHtml(item.name)}</span>
+              <span class="file-delete" onclick="event.stopPropagation(); showDeleteDialog('${escapeAttr(itemPath)}')" title="Delete">✕</span>
+            </div>`;
+        }
+      }).join('');
+    }
+
+    function selectFile(filePath, isDirectory, event) {
+      event.stopPropagation();
+      selectedFilePath = filePath;
+
+      if (isDirectory) {
+        // Toggle directory
+        const el = event.currentTarget;
+        const children = el.nextElementSibling;
+        const icon = el.querySelector('.icon');
+        if (children && children.classList.contains('file-children')) {
+          if (children.style.display === 'none') {
+            children.style.display = 'block';
+            icon.textContent = '▾';
+          } else {
+            children.style.display = 'none';
+            icon.textContent = '▸';
+          }
+        }
+      } else {
+        // Open file
+        requestFile(filePath);
+      }
+
+      // Update selection styling
+      document.querySelectorAll('.file-item.selected').forEach(el => el.classList.remove('selected'));
+      event.currentTarget.classList.add('selected');
+    }
+
+    function startRename(filePath, currentName, isDirectory, event) {
+      event.stopPropagation();
+      event.preventDefault();
+
+      const el = event.currentTarget;
+      const nameSpan = el.querySelector('.file-name');
+      if (!nameSpan) return;
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'rename-input';
+      input.value = currentName;
+      nameSpan.replaceWith(input);
+      input.focus();
+      // Select name without extension for files
+      if (!isDirectory) {
+        const dotIdx = currentName.lastIndexOf('.');
+        input.setSelectionRange(0, dotIdx > 0 ? dotIdx : currentName.length);
+      } else {
+        input.select();
+      }
+
+      function commitRename() {
+        const newName = input.value.trim();
+        input.removeEventListener('blur', commitRename);
+        input.removeEventListener('keydown', onKey);
+
+        if (!newName || newName === currentName) {
+          // Restore original name
+          const span = document.createElement('span');
+          span.className = 'file-name';
+          span.textContent = currentName;
+          input.replaceWith(span);
+          return;
+        }
+
+        // Compute new path
+        const parts = filePath.split('/');
+        parts[parts.length - 1] = newName;
+        const newPath = parts.join('/');
+
+        send({ type: 'rename_file', oldPath: filePath, newPath: newPath });
+      }
+
+      function onKey(e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          commitRename();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          input.value = currentName;
+          commitRename();
+        }
+      }
+
+      input.addEventListener('blur', commitRename);
+      input.addEventListener('keydown', onKey);
+    }
+
+    // ─── Drag and Drop ──────────────────────────────
+    let draggedFilePath = null;
+
+    function onDragStart(event, filePath) {
+      draggedFilePath = filePath;
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', filePath);
+    }
+
+    function onDragOver(event, el) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = 'move';
+      el.classList.add('drag-over');
+    }
+
+    function onDragLeave(event, el) {
+      el.classList.remove('drag-over');
+    }
+
+    function onDragOverChildren(event, el) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = 'move';
+      el.classList.add('drag-over');
+    }
+
+    function onDragLeaveChildren(event, el) {
+      el.classList.remove('drag-over');
+    }
+
+    function onDrop(event, targetDirPath) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.currentTarget.classList.remove('drag-over');
+      performMove(targetDirPath);
+    }
+
+    function onDropChildren(event, targetDirPath) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.currentTarget.classList.remove('drag-over');
+      performMove(targetDirPath);
+    }
+
+    function performMove(targetDirPath) {
+      if (!draggedFilePath) return;
+      const fileName = draggedFilePath.split('/').pop();
+      const newPath = targetDirPath ? `${targetDirPath}/${fileName}` : fileName;
+      if (newPath === draggedFilePath) return;
+      send({ type: 'rename_file', oldPath: draggedFilePath, newPath: newPath });
+      draggedFilePath = null;
+    }
+
+    // ─── New File / Folder ──────────────────────────
+    function createNewFile() {
+      newFileIsDirectory = false;
+      document.getElementById('newFileDialogTitle').textContent = 'New File';
+      document.getElementById('newFileNameInput').value = 'new-automation.ts';
+      document.getElementById('newFileDialog').classList.add('active');
+      setTimeout(() => {
+        const input = document.getElementById('newFileNameInput');
+        input.focus();
+        input.setSelectionRange(0, input.value.lastIndexOf('.'));
+      }, 50);
+    }
+
+    function createNewFolder() {
+      newFileIsDirectory = true;
+      document.getElementById('newFileDialogTitle').textContent = 'New Folder';
+      document.getElementById('newFileNameInput').value = 'new-folder';
+      document.getElementById('newFileDialog').classList.add('active');
+      setTimeout(() => {
+        const input = document.getElementById('newFileNameInput');
+        input.focus();
+        input.select();
+      }, 50);
+    }
+
+    function closeNewFileDialog() {
+      document.getElementById('newFileDialog').classList.remove('active');
+    }
+
+    function confirmNewFile() {
+      const name = document.getElementById('newFileNameInput').value.trim();
+      if (!name) return;
+      closeNewFileDialog();
+
+      // Determine parent path based on selected file
+      let parentPath = '';
+      if (selectedFilePath) {
+        // If selected item is a directory, create inside it; otherwise use its parent
+        const item = findFileItem(currentFiles, selectedFilePath);
+        if (item && item.isDirectory) {
+          parentPath = selectedFilePath;
+        } else if (selectedFilePath.includes('/')) {
+          parentPath = selectedFilePath.substring(0, selectedFilePath.lastIndexOf('/'));
+        }
+      }
+
+      const fullPath = parentPath ? `${parentPath}/${name}` : name;
+      send({ type: 'create_file', path: fullPath, isDirectory: newFileIsDirectory, content: '' });
+    }
+
+    function findFileItem(items, targetPath) {
+      for (const item of items) {
+        if (item.path === targetPath) return item;
+        if (item.children) {
+          const found = findFileItem(item.children, targetPath);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+
+    // ─── Delete with confirmation ───────────────────
+    function showDeleteDialog(filePath) {
+      pendingDeletePath = filePath;
+      const name = filePath.split('/').pop();
+      const item = findFileItem(currentFiles, filePath);
+      const typeStr = item && item.isDirectory ? 'folder' : 'file';
+      document.getElementById('deleteDialogText').textContent = `Are you sure you want to delete ${typeStr} "${name}"?`;
+      document.getElementById('deleteDialog').classList.add('active');
+    }
+
+    function closeDeleteDialog() {
+      document.getElementById('deleteDialog').classList.remove('active');
+      pendingDeletePath = null;
+    }
+
+    function confirmDelete() {
+      if (pendingDeletePath) {
+        send({ type: 'delete_file', path: pendingDeletePath });
+        if (selectedFilePath === pendingDeletePath) selectedFilePath = null;
+      }
+      closeDeleteDialog();
+    }
+
+    // ─── Keyboard handler for Delete key ────────────
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Delete' && selectedFilePath) {
+        // Only if focus is in the file tree area or nothing specific is focused
+        const active = document.activeElement;
+        const isInEditor = active && (active.closest('.editor-container') || active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT');
+        if (!isInEditor) {
+          e.preventDefault();
+          showDeleteDialog(selectedFilePath);
+        }
+      }
+    });
+
+    // Enter key in new file dialog
+    document.getElementById('newFileNameInput')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); confirmNewFile(); }
+      if (e.key === 'Escape') { e.preventDefault(); closeNewFileDialog(); }
+    });
+
+    function requestFile(filePath) {
+      if (openTabs.has(filePath)) {
+        switchToTab(filePath);
+      } else {
+        send({ type: 'read_file', path: filePath });
+      }
+    }
+
+    function refreshFiles() {
+      send({ type: 'get_files' });
+    }
+
+    // ─── Editor/Tabs ────────────────────────────────
+    function openFile(filePath, content) {
+      if (!monacoReady) {
+        // Queue until Monaco is ready
+        setTimeout(() => openFile(filePath, content), 200);
+        return;
+      }
+
+      if (!openTabs.has(filePath)) {
+        const uri = monaco.Uri.parse('file:///' + filePath);
+        let model = monaco.editor.getModel(uri);
+        if (!model) {
+          const lang = filePath.endsWith('.json') ? 'json' : 'typescript';
+          model = monaco.editor.createModel(content, lang, uri);
+        }
+        model.onDidChangeContent(() => {
+          markTabModified(filePath);
+        });
+        openTabs.set(filePath, { content, model, modified: false, viewState: null });
+      }
+
+      switchToTab(filePath);
+    }
+
+    function switchToTab(filePath) {
+      // Save current view state
+      if (activeTab && openTabs.has(activeTab)) {
+        openTabs.get(activeTab).viewState = monacoEditor.saveViewState();
+      }
+
+      activeTab = filePath;
+      const tabInfo = openTabs.get(filePath);
+
+      // Hide welcome screen
+      showWelcome(false);
+
+      // Set model
+      monacoEditor.setModel(tabInfo.model);
+      if (tabInfo.viewState) {
+        monacoEditor.restoreViewState(tabInfo.viewState);
+      }
+      monacoEditor.focus();
+
+      renderTabs();
+    }
+
+    let pendingCloseTab = null;
+
+    function closeTab(filePath, force) {
+      const tab = openTabs.get(filePath);
+      if (!tab) return;
+
+      // Warn about unsaved changes
+      if (tab.modified && !force) {
+        pendingCloseTab = filePath;
+        document.getElementById('unsavedDialogText').textContent =
+          `"${filePath.split('/').pop()}" has unsaved changes. Close without saving?`;
+        document.getElementById('unsavedDialog').classList.add('active');
+        return;
+      }
+
+      if (tab.model) {
+        tab.model.dispose();
+      }
+      openTabs.delete(filePath);
+
+      if (activeTab === filePath) {
+        const remaining = Array.from(openTabs.keys());
+        if (remaining.length > 0) {
+          switchToTab(remaining[remaining.length - 1]);
+        } else {
+          activeTab = null;
+          monacoEditor.setModel(null);
+          showWelcome(true);
+        }
+      }
+
+      renderTabs();
+      updateReloadBadge();
+    }
+
+    function markTabModified(filePath) {
+      const tab = openTabs.get(filePath);
+      if (tab && !tab.modified) {
+        tab.modified = true;
+        renderTabs();
+        updateReloadBadge();
+      }
+    }
+
+    function markTabSaved(filePath) {
+      const tab = openTabs.get(filePath);
+      if (tab) {
+        tab.modified = false;
+        tab.content = tab.model.getValue();
+        changedSinceReload.add(filePath);
+        renderTabs();
+        updateReloadBadge();
+      }
+    }
+
+    function renderTabs() {
+      const bar = document.getElementById('tabBar');
+      bar.innerHTML = Array.from(openTabs.entries()).map(([path, info]) => {
+        const name = path.split('/').pop();
+        const isActive = path === activeTab;
+        return `
+          <div class="tab${isActive ? ' active' : ''}" onclick="switchToTab('${escapeAttr(path)}')">
+            ${escapeHtml(name)}${info.modified ? '<span class="modified">●</span>' : ''}
+            <span class="close-tab" onclick="event.stopPropagation(); closeTab('${escapeAttr(path)}', false)">&times;</span>
+          </div>`;
+      }).join('');
+    }
+
+    function saveCurrentFile() {
+      if (activeTab && openTabs.has(activeTab)) {
+        const tab = openTabs.get(activeTab);
+        const content = tab.model.getValue();
+        send({ type: 'write_file', path: activeTab, content });
+      }
+    }
+
+    // ─── Monaco Editor Setup ────────────────────────
+    function initMonaco() {
+      if (monacoReady) return; // Prevent double-init
+
+      require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.47.0/min/vs' } });
+
+      require(['vs/editor/editor.main'], function () {
+        if (monacoReady) return; // Guard against duplicate require callbacks
+
+        // Configure TypeScript defaults
+        monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+          target: monaco.languages.typescript.ScriptTarget.ES2022,
+          module: monaco.languages.typescript.ModuleKind.CommonJS,
+          strict: true,
+          esModuleInterop: true,
+          skipLibCheck: true,
+          allowJs: true,
+          allowImportingTsExtensions: true,
+          noEmit: true,
+          moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+        });
+
+        monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+          noSemanticValidation: false,
+          noSyntaxValidation: false,
+        });
+
+        // Load TAE type definitions
+        loadTypeDefinitions();
+
+        const container = document.getElementById('editorContainer');
+
+        monacoEditor = monaco.editor.create(container, {
+          theme: 'vs-dark',
+          language: 'typescript',
+          automaticLayout: true,
+          minimap: { enabled: false },
+          fontSize: 13,
+          fontFamily: "'Cascadia Code', 'Fira Code', 'JetBrains Mono', Consolas, monospace",
+          lineNumbers: 'on',
+          renderLineHighlight: 'line',
+          scrollBeyondLastLine: false,
+          wordWrap: 'on',
+          tabSize: 2,
+          insertSpaces: true,
+          formatOnPaste: true,
+          suggestOnTriggerCharacters: true,
+          quickSuggestions: true,
+          fixedOverflowWidgets: true,
+          padding: { top: 8 },
+        });
+
+        // Ctrl+S to save
+        monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+          saveCurrentFile();
+        });
+
+        // Ctrl+click go-to-definition: navigate to the file if it's open or in the file tree
+        monacoEditor.onMouseDown((e) => {
+          if (e.event.ctrlKey && e.target.type === monaco.editor.MouseTargetType.CONTENT_TEXT) {
+            const model = monacoEditor.getModel();
+            if (!model) return;
+            const position = e.target.position;
+            if (!position) return;
+            // Use Monaco's built-in getDefinitionAtPosition via the command
+            monaco.editor.getEditors();
+            // Trigger go-to-definition command
+            monacoEditor.getAction('editor.action.revealDefinition')?.run();
+          }
+        });
+
+        // Override openCodeEditor to handle ctrl+click navigation between files
+        const editorService = monacoEditor._codeEditorService;
+        if (editorService) {
+          editorService.openCodeEditor = function(input, source) {
+            const uri = input.resource;
+            if (!uri) return Promise.resolve(null);
+            // Extract file path from URI (strip file:/// prefix)
+            let filePath = uri.path;
+            if (filePath.startsWith('/')) filePath = filePath.substring(1);
+            // Check if the file exists in openTabs or in the file tree
+            if (openTabs.has(filePath)) {
+              switchToTab(filePath);
+              if (input.options && input.options.selection) {
+                const sel = input.options.selection;
+                monacoEditor.setPosition({ lineNumber: sel.startLineNumber, column: sel.startColumn });
+                monacoEditor.revealLineInCenter(sel.startLineNumber);
+              }
+              return Promise.resolve(monacoEditor);
+            }
+            // Check if file exists in file tree and open it
+            const item = findFileItem(currentFiles, filePath);
+            if (item && !item.isDirectory) {
+              // Request the file, then navigate when it opens
+              const pendingSel = input.options?.selection;
+              const origHandler = handleMessage;
+              const tempHandler = function(msg) {
+                origHandler(msg);
+                if (msg.type === 'file_content' && msg.path === filePath && pendingSel) {
+                  setTimeout(() => {
+                    monacoEditor.setPosition({ lineNumber: pendingSel.startLineNumber, column: pendingSel.startColumn });
+                    monacoEditor.revealLineInCenter(pendingSel.startLineNumber);
+                  }, 100);
+                }
+              };
+              handleMessage = tempHandler;
+              setTimeout(() => { handleMessage = origHandler; }, 3000);
+              send({ type: 'read_file', path: filePath });
+              return Promise.resolve(monacoEditor);
+            }
+            return Promise.resolve(null);
+          };
+        }
+
+        monacoReady = true;
+
+        // Show welcome if no tabs
+        if (openTabs.size === 0) {
+          monacoEditor.setModel(null);
+        }
+      });
+    }
+
+    function showWelcome(show) {
+      let welcome = document.querySelector('.editor-welcome');
+      if (show) {
+        if (!welcome) {
+          welcome = document.createElement('div');
+          welcome.className = 'editor-welcome';
+          welcome.innerHTML = '<div>TypeScript Automation Engine</div><div class="hint">Select a file from the sidebar to begin editing</div>';
+          document.getElementById('editorContainer').appendChild(welcome);
+        }
+        welcome.style.display = '';
+      } else if (welcome) {
+        welcome.style.display = 'none';
+      }
+    }
+
+    function loadTypeDefinitions() {
+      // Fetch TAE .d.ts from the API
+      const basePath = getBasePath();
+      fetch(`${basePath}/api/files/node_modules/tae/index.d.ts`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.content) {
+            monaco.languages.typescript.typescriptDefaults.addExtraLib(
+              data.content,
+              'file:///node_modules/tae/index.d.ts'
+            );
+          }
+        })
+        .catch(() => {
+          // Type defs not available yet — that's ok
+        });
+
+      fetch(`${basePath}/api/files/node_modules/tae/automation.d.ts`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.content) {
+            monaco.languages.typescript.typescriptDefaults.addExtraLib(
+              data.content,
+              'file:///node_modules/tae/automation.d.ts'
+            );
+          }
+        })
+        .catch(() => {});
+
+      fetch(`${basePath}/api/files/node_modules/tae/types.d.ts`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.content) {
+            monaco.languages.typescript.typescriptDefaults.addExtraLib(
+              data.content,
+              'file:///node_modules/tae/types.d.ts'
+            );
+          }
+        })
+        .catch(() => {});
+    }
+
+    // Pre-load all .ts files as Monaco models so imports resolve correctly
+    function preloadAllTsFiles() {
+      if (!monacoReady) {
+        setTimeout(preloadAllTsFiles, 300);
+        return;
+      }
+      send({ type: 'get_all_file_contents' });
+    }
+
+    function handleAllFileContents(files) {
+      if (!monacoReady) return;
+      for (const f of files) {
+        const uri = monaco.Uri.parse('file:///' + f.path);
+        // Skip if model already exists (file is open in a tab)
+        if (monaco.editor.getModel(uri)) continue;
+        // Create a background model so TS language service resolves imports
+        const model = monaco.editor.createModel(f.content, 'typescript', uri);
+        // Track it so we don't leak — store disposer
+        if (!window._bgModels) window._bgModels = new Map();
+        // Dispose previous background model for this path if any
+        if (window._bgModels.has(f.path)) {
+          window._bgModels.get(f.path).dispose();
+        }
+        window._bgModels.set(f.path, model);
+      }
+    }
+
+    // ─── Logs ───────────────────────────────────────
+    function renderLogs() {
+      const area = document.getElementById('logArea');
+      area.innerHTML = '';
+
+      const filtered = getFilteredLogs();
+      for (const entry of filtered.slice(-500)) {
+        renderLogEntry(entry, false);
+      }
+      scrollLogsToBottom();
+    }
+
+    function renderLogEntry(entry, scroll = true) {
+      const levelFilter = document.getElementById('logLevelFilter').value;
+      const sourceFilter = document.getElementById('logSourceFilter').value;
+
+      if (levelFilter !== 'all' && entry.level !== levelFilter) return;
+      if (sourceFilter !== 'all' && entry.source !== sourceFilter) return;
+
+      const area = document.getElementById('logArea');
+      const div = document.createElement('div');
+      div.className = 'log-entry';
+
+      const time = new Date(entry.timestamp).toLocaleTimeString('en-GB', { hour12: false });
+      let msg = escapeHtml(entry.message);
+
+      // Detect if message looks like a JSON object (multi-line) and render in a code block
+      const isMultiLine = entry.message && entry.message.includes('\n');
+      if (isMultiLine) {
+        msg = `<div class="log-object">${msg}</div>`;
+      }
+
+      let extra = '';
+      if (entry.extra !== undefined && entry.extra !== null) {
+        let extraStr;
+        if (typeof entry.extra === 'string') {
+          extraStr = entry.extra;
+        } else {
+          try {
+            extraStr = JSON.stringify(entry.extra, null, 2);
+          } catch { extraStr = String(entry.extra); }
+        }
+        extra = `<div class="log-object">${escapeHtml(extraStr)}</div>`;
+      }
+
+      div.innerHTML = `
+        <span class="log-time">${time}</span>
+        <span class="log-level ${entry.level}">${entry.level.toUpperCase()}</span>
+        <span class="log-source">${escapeHtml(entry.source)}</span>
+        <span class="log-message">${msg}${extra}</span>
+      `;
+
+      area.appendChild(div);
+      if (scroll) scrollLogsToBottom();
+    }
+
+    function getFilteredLogs() {
+      const level = document.getElementById('logLevelFilter').value;
+      const source = document.getElementById('logSourceFilter').value;
+      return allLogs.filter(l => {
+        if (level !== 'all' && l.level !== level) return false;
+        if (source !== 'all' && l.source !== source) return false;
+        return true;
+      });
+    }
+
+    function updateSourceFilter() {
+      const select = document.getElementById('logSourceFilter');
+      const current = select.value;
+      const options = ['<option value="all">All Sources</option>'];
+      for (const src of Array.from(logSources).sort()) {
+        options.push(`<option value="${escapeAttr(src)}"${src === current ? ' selected' : ''}>${escapeHtml(src)}</option>`);
+      }
+      select.innerHTML = options.join('');
+    }
+
+    function applyLogFilter() {
+      renderLogs();
+    }
+
+    function scrollLogsToBottom() {
+      if (!autoScrollLocked) return;
+      const area = document.getElementById('logArea');
+      area.scrollTop = area.scrollHeight;
+    }
+
+    function clearLogs() {
+      allLogs = [];
+      document.getElementById('logArea').innerHTML = '';
+      send({ type: 'clear_logs' });
+    }
+
+    function addLocalLog(level, source, message) {
+      const entry = {
+        timestamp: new Date().toISOString(),
+        level, source, message
+      };
+      allLogs.push(entry);
+      renderLogEntry(entry, true);
+    }
+
+    // ─── Actions ────────────────────────────────────
+    function reload() {
+      const unsaved = getModifiedCount();
+      if (unsaved > 0) {
+        document.getElementById('reloadDialogText').textContent =
+          `You have ${unsaved} unsaved file${unsaved > 1 ? 's' : ''}. What would you like to do?`;
+        document.getElementById('reloadDialog').classList.add('active');
+        return;
+      }
+      doReload();
+    }
+
+    function doReload() {
+      addLocalLog('info', 'ui', 'Sending reload request...');
+      send({ type: 'reload' });
+    }
+
+    function reloadSaveAndReload() {
+      document.getElementById('reloadDialog').classList.remove('active');
+      saveAllModifiedFiles();
+      doReload();
+    }
+
+    function reloadWithoutSaving() {
+      document.getElementById('reloadDialog').classList.remove('active');
+      doReload();
+    }
+
+    function cancelReloadDialog() {
+      document.getElementById('reloadDialog').classList.remove('active');
+    }
+
+    function saveAllModifiedFiles() {
+      for (const [filePath, tab] of openTabs) {
+        if (tab.modified) {
+          const content = tab.model.getValue();
+          send({ type: 'write_file', path: filePath, content });
+        }
+      }
+    }
+
+    function getModifiedCount() {
+      let count = 0;
+      for (const [, tab] of openTabs) {
+        if (tab.modified) count++;
+      }
+      return count;
+    }
+
+    function updateReloadBadge() {
+      const btn = document.getElementById('reloadBtn');
+      const count = changedSinceReload.size;
+      if (count > 0) {
+        btn.innerHTML = `⟳ Reload <span class="reload-badge">${count}</span>`;
+      } else {
+        btn.textContent = '⟳ Reload';
+      }
+    }
+
+    function showExportDialog() {
+      document.getElementById('exportDialog').classList.add('active');
+    }
+
+    function closeExportDialog() {
+      document.getElementById('exportDialog').classList.remove('active');
+    }
+
+    function confirmExport() {
+      closeExportDialog();
+      send({ type: 'export_sync' });
+    }
+
+    function showImportDialog() {
+      document.getElementById('importDialog').classList.add('active');
+    }
+
+    function closeImportDialog() {
+      document.getElementById('importDialog').classList.remove('active');
+    }
+
+    function confirmImport() {
+      closeImportDialog();
+      send({ type: 'import_sync' });
+    }
+
+    // ─── Unsaved changes dialog ─────────────────────
+    function cancelCloseUnsaved() {
+      document.getElementById('unsavedDialog').classList.remove('active');
+      pendingCloseTab = null;
+    }
+
+    function saveAndCloseUnsaved() {
+      document.getElementById('unsavedDialog').classList.remove('active');
+      if (pendingCloseTab) {
+        const tab = openTabs.get(pendingCloseTab);
+        if (tab) {
+          send({ type: 'write_file', path: pendingCloseTab, content: tab.model.getValue() });
+        }
+        closeTab(pendingCloseTab, true);
+      }
+      pendingCloseTab = null;
+    }
+
+    function discardAndCloseUnsaved() {
+      document.getElementById('unsavedDialog').classList.remove('active');
+      if (pendingCloseTab) {
+        closeTab(pendingCloseTab, true);
+      }
+      pendingCloseTab = null;
+    }
+
+    // ─── Work with AI ───────────────────────────────
+    function showAiDialog() {
+      document.getElementById('aiDialog').classList.add('active');
+    }
+
+    function closeAiDialog() {
+      document.getElementById('aiDialog').classList.remove('active');
+    }
+
+    function downloadEntities() {
+      const btn = document.getElementById('aiEntitiesBtn');
+      btn.textContent = 'Loading...';
+      btn.disabled = true;
+      pendingEntitiesDownload = true;
+      send({ type: 'get_all_entities' });
+    }
+
+    function handleEntitiesDownload(entities) {
+      const btn = document.getElementById('aiEntitiesBtn');
+      btn.textContent = 'Download .txt';
+      btn.disabled = false;
+
+      if (!entities.length) {
+        addLocalLog('warn', 'ui', 'No entities found — is Home Assistant connected?');
+        return;
+      }
+
+      // Group by domain
+      const grouped = {};
+      for (const e of entities) {
+        const domain = e.entity_id.split('.')[0];
+        if (!grouped[domain]) grouped[domain] = [];
+        grouped[domain].push(e);
+      }
+
+      let text = `Home Assistant Entities & Devices\n`;
+      text += `Generated: ${new Date().toISOString()}\n`;
+      text += `Total entities: ${entities.length}\n`;
+      text += `${'='.repeat(60)}\n\n`;
+
+      for (const domain of Object.keys(grouped).sort()) {
+        const items = grouped[domain].sort((a, b) => a.entity_id.localeCompare(b.entity_id));
+        text += `── ${domain} (${items.length}) ${'─'.repeat(Math.max(0, 44 - domain.length))}\n\n`;
+        for (const e of items) {
+          const friendly = e.attributes?.friendly_name || '';
+          const state = e.state || '';
+          text += `  ${e.entity_id}\n`;
+          if (friendly) text += `    Name: ${friendly}\n`;
+          text += `    State: ${state}\n`;
+          // Include useful attributes
+          const attrs = e.attributes || {};
+          if (attrs.device_class) text += `    Device class: ${attrs.device_class}\n`;
+          if (attrs.unit_of_measurement) text += `    Unit: ${attrs.unit_of_measurement}\n`;
+          text += `\n`;
+        }
+      }
+
+      triggerDownload('ha-entities.txt', text, 'text/plain');
+      addLocalLog('info', 'ui', `Downloaded ${entities.length} entities`);
+    }
+
+    function downloadSkillFile() {
+      const btn = document.getElementById('aiSkillBtn');
+      btn.textContent = 'Loading...';
+      btn.disabled = true;
+      send({ type: 'get_skill_file' });
+    }
+
+    function handleSkillDownload(content) {
+      const btn = document.getElementById('aiSkillBtn');
+      btn.textContent = 'Download .md';
+      btn.disabled = false;
+
+      if (!content) {
+        addLocalLog('warn', 'ui', 'SKILL.md not found');
+        return;
+      }
+
+      triggerDownload('SKILL.md', content, 'text/markdown');
+      addLocalLog('info', 'ui', 'Downloaded SKILL.md');
+    }
+
+    function triggerDownload(filename, content, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // ─── Resize handle ──────────────────────────────
+    function setupResize() {
+      const handle = document.getElementById('resizeHandle');
+      const panel = document.getElementById('bottomPanel');
+      let startY, startH;
+
+      handle.addEventListener('mousedown', (e) => {
+        startY = e.clientY;
+        startH = panel.offsetHeight;
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+        e.preventDefault();
+      });
+
+      function onMouseMove(e) {
+        const diff = startY - e.clientY;
+        panel.style.height = Math.max(100, Math.min(600, startH + diff)) + 'px';
+      }
+
+      function onMouseUp() {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+      }
+    }
+
+    // ─── Helpers ────────────────────────────────────
+    function escapeHtml(s) {
+      if (typeof s !== 'string') return String(s);
+      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function escapeAttr(s) {
+      return s.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    }
+
+    // ─── YAML to TypeScript Interface ────────────────
+    function showYamlToTsDialog() {
+      document.getElementById('yamlInput').value = '';
+      document.getElementById('yamlInterfaceName').value = '';
+      document.getElementById('yamlPreview').style.display = 'none';
+      document.getElementById('yamlPreview').textContent = '';
+      document.getElementById('yamlCopyBtn').style.display = 'none';
+      document.getElementById('yamlToTsDialog').classList.add('active');
+      setTimeout(() => document.getElementById('yamlInterfaceName').focus(), 50);
+    }
+
+    function closeYamlToTsDialog() {
+      document.getElementById('yamlToTsDialog').classList.remove('active');
+    }
+
+    function generateYamlPreview() {
+      const yaml = document.getElementById('yamlInput').value.trim();
+      const name = document.getElementById('yamlInterfaceName').value.trim() || 'GeneratedAttributes';
+      if (!yaml) return;
+
+      try {
+        const result = yamlToInterface(yaml, name);
+        document.getElementById('yamlPreview').textContent = result;
+        document.getElementById('yamlPreview').style.display = 'block';
+        document.getElementById('yamlCopyBtn').style.display = '';
+      } catch (e) {
+        document.getElementById('yamlPreview').textContent = 'Error parsing YAML: ' + e.message;
+        document.getElementById('yamlPreview').style.display = 'block';
+        document.getElementById('yamlCopyBtn').style.display = 'none';
+      }
+    }
+
+    function copyYamlResult() {
+      const text = document.getElementById('yamlPreview').textContent;
+      const btn = document.getElementById('yamlCopyBtn');
+      // Use fallback for HA ingress (no navigator.clipboard in cross-origin iframes)
+      function onSuccess() {
+        btn.textContent = '✓ Copied!';
+        btn.style.borderColor = 'var(--green)';
+        btn.style.color = 'var(--green)';
+        setTimeout(() => {
+          btn.textContent = 'Copy to Clipboard';
+          btn.style.borderColor = '';
+          btn.style.color = '';
+        }, 2000);
+      }
+      function onFail() {
+        btn.textContent = '✗ Copy failed';
+        btn.style.borderColor = 'var(--red)';
+        btn.style.color = 'var(--red)';
+        setTimeout(() => {
+          btn.textContent = 'Copy to Clipboard';
+          btn.style.borderColor = '';
+          btn.style.color = '';
+        }, 2000);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(onSuccess).catch(() => {
+          // Fallback for insecure contexts
+          fallbackCopy(text) ? onSuccess() : onFail();
+        });
+      } else {
+        fallbackCopy(text) ? onSuccess() : onFail();
+      }
+    }
+
+    function fallbackCopy(text) {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        return ok;
+      } catch { return false; }
+    }
+
+    function yamlToInterface(yaml, interfaceName) {
+      const parsed = parseYamlBlock(yaml.split('\n'), 0, -1);
+      return buildInterface(parsed.obj, interfaceName, 0);
+    }
+
+    function parseYamlBlock(lines, startIdx, parentIndent) {
+      const obj = {};
+      let i = startIdx;
+      let lastKey = null;
+
+      while (i < lines.length) {
+        const raw = lines[i];
+        if (raw.trim() === '' || raw.trim().startsWith('#')) { i++; continue; }
+
+        const indent = raw.search(/\S/);
+        const line = raw.trim();
+
+        // If dedented past our parent, we're done with this block
+        if (indent <= parentIndent && parentIndent >= 0) break;
+
+        // Array item
+        if (line.startsWith('- ')) {
+          if (lastKey !== null) {
+            if (!Array.isArray(obj[lastKey])) obj[lastKey] = [];
+            obj[lastKey].push(parseYamlValue(line.substring(2).trim()));
+          }
+          i++;
+          continue;
+        }
+
+        const colonIdx = line.indexOf(':');
+        if (colonIdx === -1) { i++; continue; }
+
+        const key = line.substring(0, colonIdx).trim();
+        const valPart = line.substring(colonIdx + 1).trim();
+        lastKey = key;
+
+        if (valPart === '' || valPart === '|' || valPart === '>') {
+          // Peek at next non-empty line to determine if it's an array or object
+          let nextIdx = i + 1;
+          while (nextIdx < lines.length && lines[nextIdx].trim() === '') nextIdx++;
+          if (nextIdx < lines.length && lines[nextIdx].trim().startsWith('- ')) {
+            // It's an array
+            obj[key] = [];
+            let j = nextIdx;
+            while (j < lines.length) {
+              const r = lines[j];
+              if (r.trim() === '' || r.trim().startsWith('#')) { j++; continue; }
+              const ri = r.search(/\S/);
+              if (ri <= indent) break;
+              if (r.trim().startsWith('- ')) {
+                obj[key].push(parseYamlValue(r.trim().substring(2).trim()));
+                j++;
+              } else {
+                break;
+              }
+            }
+            i = j;
+          } else {
+            // Nested object
+            const sub = parseYamlBlock(lines, i + 1, indent);
+            obj[key] = sub.obj;
+            i = sub.nextIdx;
+          }
+        } else {
+          obj[key] = parseYamlValue(valPart);
+          i++;
+        }
+      }
+
+      return { obj, nextIdx: i };
+    }
+
+    function parseYamlValue(val) {
+      if (val === 'true' || val === 'false') return val === 'true';
+      if (val === 'null' || val === '~') return null;
+      if (val === '') return '';
+      // Quoted strings
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        return val.slice(1, -1);
+      }
+      // Numbers
+      const num = Number(val);
+      if (!isNaN(num) && val !== '') return num;
+      return val; // string
+    }
+
+    function inferType(value) {
+      if (value === null) return 'any';
+      if (typeof value === 'boolean') return 'boolean';
+      if (typeof value === 'number') return 'number';
+      if (typeof value === 'string') return 'string';
+      if (Array.isArray(value)) {
+        if (value.length === 0) return 'any[]';
+        const types = [...new Set(value.map(v => inferType(v)))];
+        return '[' + value.map(v => inferType(v)).join(', ') + ']';
+      }
+      if (typeof value === 'object') return 'Record<string, any>';
+      return 'any';
+    }
+
+    function buildInterface(obj, name, depth) {
+      const pad = '  '.repeat(depth);
+      const inner = '  '.repeat(depth + 1);
+      let out = `${pad}interface ${name} {\n`;
+
+      for (const [key, value] of Object.entries(obj)) {
+        const safeName = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key) ? key : `'${key}'`;
+        const nullable = value === null ? ' | null' : '';
+        if (value !== null && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length > 0) {
+          // Nested object → inline
+          out += `${inner}${safeName}?: {\n`;
+          for (const [k2, v2] of Object.entries(value)) {
+            const safeName2 = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(k2) ? k2 : `'${k2}'`;
+            const nullable2 = v2 === null ? ' | null' : '';
+            out += `${inner}  ${safeName2}?: ${inferType(v2)}${nullable2};\n`;
+          }
+          out += `${inner}};\n`;
+        } else {
+          out += `${inner}${safeName}?: ${inferType(value)}${nullable};\n`;
+        }
+      }
+
+      out += `${pad}}`;
+      return out;
+    }
+
+    // ─── Panel switching ─────────────────────────────
+    let activePanel = 'logs';
+
+    function switchPanel(panel) {
+      activePanel = panel;
+      document.querySelectorAll('.panel-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.panel === panel);
+      });
+      document.getElementById('logArea').style.display = panel === 'logs' ? '' : 'none';
+      document.getElementById('terminalArea').style.display = panel === 'terminal' ? 'flex' : 'none';
+      document.getElementById('logFilters').style.display = panel === 'logs' ? '' : 'none';
+      if (panel === 'terminal') {
+        document.getElementById('terminalInput').focus();
+        // Request entities for autocomplete if not loaded
+        if (cachedEntityIds.length === 0) send({ type: 'get_all_entities' });
+      }
+    }
+
+    // ─── Terminal ────────────────────────────────────
+    let terminalHistory = [];
+    let terminalHistoryIdx = -1;
+    let terminalCmdId = 0;
+    let cachedEntityIds = [];
+    let acItems = [];
+    let acSelectedIdx = -1;
+
+    // Domain → services mapping
+    const SERVICE_MAP = {
+      light: ['turn_on', 'turn_off', 'toggle'],
+      switch: ['turn_on', 'turn_off', 'toggle'],
+      climate: ['set_temperature', 'set_hvac_mode', 'turn_on', 'turn_off'],
+      cover: ['open_cover', 'close_cover', 'stop_cover', 'set_cover_position', 'toggle'],
+      fan: ['turn_on', 'turn_off', 'toggle', 'set_speed', 'set_percentage'],
+      media_player: ['turn_on', 'turn_off', 'toggle', 'play_media', 'media_play', 'media_pause', 'media_stop', 'set_volume_level', 'volume_up', 'volume_down'],
+      lock: ['lock', 'unlock'],
+      vacuum: ['start', 'stop', 'return_to_base', 'turn_on', 'turn_off'],
+      scene: ['turn_on'],
+      script: ['turn_on', 'turn_off', 'toggle'],
+      automation: ['trigger', 'turn_on', 'turn_off', 'toggle'],
+      input_boolean: ['turn_on', 'turn_off', 'toggle'],
+      input_number: ['set_value'],
+      input_select: ['select_option'],
+      input_text: ['set_value'],
+      button: ['press'],
+      number: ['set_value'],
+      select: ['select_option'],
+      notify: ['send_message'],
+      alarm_control_panel: ['alarm_arm_away', 'alarm_arm_home', 'alarm_disarm'],
+      tts: ['speak'],
+      camera: ['turn_on', 'turn_off', 'snapshot'],
+    };
+
+    const TAE_FUNCTIONS = [
+      { name: "callService", hint: "domain, service, data", desc: "Call an HA service" },
+      { name: "getEntityState", hint: "entityId", desc: "Read entity from cache" },
+      { name: "fetchEntityState", hint: "entityId", desc: "Fetch entity from HA API" },
+      { name: "getAllEntities", hint: "", desc: "List all entities" },
+      { name: "help", hint: "[functionName]", desc: "Show help for commands" },
+    ];
+
+    const HELP_DETAILS = {
+      callService: {
+        signature: "callService(domain, service, data?)",
+        description: "Calls a Home Assistant service. The domain is the integration (e.g. 'light', 'switch', 'climate'). The service is the action (e.g. 'turn_on', 'turn_off', 'toggle'). The optional data object contains service-specific parameters including entity_id.",
+        examples: [
+          "callService('light', 'turn_on', {entity_id: 'light.bedroom', brightness: 200})",
+          "callService('switch', 'toggle', {entity_id: 'switch.fan'})",
+          "callService('climate', 'set_temperature', {entity_id: 'climate.living_room', temperature: 22})",
+          "callService('notify', 'mobile_app_phone', {message: 'Hello!'})",
+        ],
+      },
+      getEntityState: {
+        signature: "getEntityState(entityId)",
+        description: "Reads the current state of an entity from the in-memory cache. Fast (no network call) but may be a few seconds stale. Returns the full entity state object with state, attributes, last_changed, etc.",
+        examples: [
+          "getEntityState('sensor.living_room_temperature')",
+          "getEntityState('light.bedroom')",
+          "getEntityState('binary_sensor.front_door')",
+        ],
+      },
+      fetchEntityState: {
+        signature: "fetchEntityState(entityId)",
+        description: "Fetches the current state of an entity directly from the Home Assistant API. Always returns fresh data but requires a network call. Use when you need guaranteed up-to-date state before making decisions.",
+        examples: [
+          "fetchEntityState('sensor.power_consumption')",
+          "fetchEntityState('climate.thermostat')",
+        ],
+      },
+      getAllEntities: {
+        signature: "getAllEntities()",
+        description: "Returns a list of all entities known to Home Assistant with their entity_id, current state, and friendly name. Useful for discovering available entities.",
+        examples: [
+          "getAllEntities()",
+        ],
+      },
+      help: {
+        signature: "help [functionName]",
+        description: "Shows available commands and their descriptions. Use 'help <functionName>' for detailed help with examples for a specific command.",
+        examples: [
+          "help",
+          "help callService",
+          "help getEntityState",
+        ],
+      },
+    };
+
+    function handleTerminalKey(e) {
+      const popup = document.getElementById('autocompletePopup');
+      const isAcOpen = popup.classList.contains('active');
+
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (isAcOpen && acSelectedIdx >= 0) {
+          applyAutocomplete(acItems[acSelectedIdx]);
+        } else {
+          executeTerminalInput();
+        }
+        hideAutocomplete();
+        return;
+      }
+
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        if (isAcOpen && acItems.length > 0) {
+          if (acSelectedIdx < 0) acSelectedIdx = 0;
+          applyAutocomplete(acItems[acSelectedIdx]);
+          hideAutocomplete();
+        } else {
+          showContextAutocomplete();
+        }
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        hideAutocomplete();
+        return;
+      }
+
+      if (isAcOpen) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          acSelectedIdx = Math.min(acSelectedIdx + 1, acItems.length - 1);
+          renderAutocomplete();
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          acSelectedIdx = Math.max(acSelectedIdx - 1, 0);
+          renderAutocomplete();
+          return;
+        }
+      } else {
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          if (terminalHistory.length > 0) {
+            if (terminalHistoryIdx < 0) terminalHistoryIdx = terminalHistory.length;
+            terminalHistoryIdx = Math.max(0, terminalHistoryIdx - 1);
+            document.getElementById('terminalInput').value = terminalHistory[terminalHistoryIdx];
+          }
+          return;
+        }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          if (terminalHistoryIdx >= 0) {
+            terminalHistoryIdx = Math.min(terminalHistoryIdx + 1, terminalHistory.length);
+            document.getElementById('terminalInput').value =
+              terminalHistoryIdx < terminalHistory.length ? terminalHistory[terminalHistoryIdx] : '';
+          }
+          return;
+        }
+      }
+    }
+
+    function handleTerminalInput(e) {
+      // Auto-suggest as user types in an argument position
+      const input = document.getElementById('terminalInput');
+      const val = input.value;
+      const cursor = input.selectionStart;
+      const ctx = parseInputContext(val, cursor);
+      if (ctx && ctx.partial !== undefined) {
+        showFilteredAutocomplete(ctx);
+      } else {
+        hideAutocomplete();
+      }
+    }
+
+    function parseInputContext(val, cursor) {
+      const before = val.substring(0, cursor);
+
+      // Check if we're inside callService arguments
+      const csMatch = before.match(/^callService\s*\(\s*/);
+      if (csMatch) {
+        const argsStr = before.substring(csMatch[0].length);
+        // Parse string arguments separated by commas
+        const args = [];
+        let i = 0, current = '', inStr = false, strChar = '';
+        let depth = 0;
+        while (i < argsStr.length) {
+          const ch = argsStr[i];
+          if (inStr) {
+            if (ch === strChar && argsStr[i-1] !== '\\') { inStr = false; current += ch; }
+            else current += ch;
+          } else if (ch === '\'' || ch === '"') {
+            inStr = true; strChar = ch; current += ch;
+          } else if (ch === '{') { depth++; current += ch; }
+          else if (ch === '}') { depth--; current += ch; }
+          else if (ch === ',' && depth === 0) {
+            args.push(current.trim()); current = '';
+          } else {
+            current += ch;
+          }
+          i++;
+        }
+        // current is what's being typed now
+        const argIdx = args.length; // 0=domain, 1=service, 2=data
+        const partial = current.trim();
+
+        if (argIdx === 0) {
+          // Typing domain
+          const unquoted = partial.replace(/^['"]/, '');
+          return { type: 'domain', partial: unquoted };
+        }
+        if (argIdx === 1) {
+          // Typing service — we know the domain
+          const domain = args[0].replace(/^['"]|['"]$/g, '');
+          const unquoted = partial.replace(/^['"]/, '');
+          return { type: 'service', domain, partial: unquoted };
+        }
+        if (argIdx === 2) {
+          // Inside data object — check for entity_id
+          const eidMatch = partial.match(/entity_id\s*:\s*['"]?([^'"}]*)$/);
+          if (eidMatch) {
+            const domain = args[0].replace(/^['"]|['"]$/g, '');
+            return { type: 'entity', partial: eidMatch[1], filterDomain: domain };
+          }
+        }
+        return null;
+      }
+
+      // Check if we're inside getEntityState or fetchEntityState
+      const esMatch = before.match(/^(getEntityState|fetchEntityState)\s*\(\s*['"]?([^'")]*)$/);
+      if (esMatch) {
+        return { type: 'entity', partial: esMatch[2], filterDomain: null };
+      }
+
+      // help <functionName> — suggest function names after help
+      const helpMatch = before.match(/^help\s+(\w*)$/);
+      if (helpMatch) {
+        return { type: 'helpTopic', partial: helpMatch[1] };
+      }
+
+      // Top level — suggest function names
+      if (!before.includes('(')) {
+        return { type: 'function', partial: before.trim() };
+      }
+
+      return null;
+    }
+
+    function showContextAutocomplete() {
+      const input = document.getElementById('terminalInput');
+      const val = input.value;
+      const cursor = input.selectionStart;
+      const ctx = parseInputContext(val, cursor);
+
+      if (!ctx) {
+        // Default: show functions
+        showFilteredAutocomplete({ type: 'function', partial: '' });
+        return;
+      }
+      showFilteredAutocomplete(ctx);
+    }
+
+    function showFilteredAutocomplete(ctx) {
+      acItems = [];
+      acSelectedIdx = 0;
+
+      if (ctx.type === 'function') {
+        acItems = TAE_FUNCTIONS
+          .filter(f => f.name.toLowerCase().startsWith(ctx.partial.toLowerCase()))
+          .map(f => {
+            const isHelp = f.name === 'help';
+            return {
+              label: f.name, hint: f.desc, type: 'fn',
+              value: isHelp ? 'help ' : f.name + '(' + (f.hint ? '' : ')'),
+            };
+          });
+      }
+
+      if (ctx.type === 'helpTopic') {
+        acItems = TAE_FUNCTIONS
+          .filter(f => f.name !== 'help' && f.name.toLowerCase().startsWith(ctx.partial.toLowerCase()))
+          .map(f => ({ label: f.name, hint: f.desc, type: 'fn', value: f.name }));
+      }
+
+      if (ctx.type === 'domain') {
+        acItems = Object.keys(SERVICE_MAP)
+          .filter(d => d.startsWith(ctx.partial.toLowerCase()))
+          .sort()
+          .map(d => ({ label: d, hint: SERVICE_MAP[d].slice(0, 3).join(', ') + '...', type: 'domain', value: "'" + d + "'" }));
+      }
+
+      if (ctx.type === 'service') {
+        const services = SERVICE_MAP[ctx.domain] || [];
+        acItems = services
+          .filter(s => s.startsWith(ctx.partial.toLowerCase()))
+          .map(s => ({ label: s, hint: ctx.domain, type: 'service', value: "'" + s + "'" }));
+      }
+
+      if (ctx.type === 'entity') {
+        const search = ctx.partial.toLowerCase();
+        let entityList = cachedEntityIds;
+        if (ctx.filterDomain) {
+          entityList = entityList.filter(e => e.id.startsWith(ctx.filterDomain + '.'));
+        }
+        acItems = entityList
+          .filter(e => e.id.includes(search) || (e.name && e.name.toLowerCase().includes(search)))
+          .slice(0, 50)
+          .map(e => ({ label: e.id, hint: e.name, type: 'entity', value: e.id }));
+      }
+
+      if (acItems.length === 0) {
+        hideAutocomplete();
+        return;
+      }
+
+      renderAutocomplete();
+      document.getElementById('autocompletePopup').classList.add('active');
+    }
+
+    function renderAutocomplete() {
+      const popup = document.getElementById('autocompletePopup');
+      popup.innerHTML = acItems.map((item, i) =>
+        `<div class="ac-item${i === acSelectedIdx ? ' selected' : ''}" onmousedown="event.preventDefault(); acSelectedIdx=${i}; applyAutocomplete(acItems[${i}]); hideAutocomplete();">
+          <span class="ac-label">${escapeHtml(item.label)}</span>
+          ${item.hint ? `<span class="ac-hint">${escapeHtml(item.hint)}</span>` : ''}
+          <span class="ac-type">${item.type}</span>
+        </div>`
+      ).join('');
+      // Scroll selected into view
+      const selected = popup.querySelector('.ac-item.selected');
+      if (selected) selected.scrollIntoView({ block: 'nearest' });
+    }
+
+    function applyAutocomplete(item) {
+      const input = document.getElementById('terminalInput');
+      const val = input.value;
+      const cursor = input.selectionStart;
+      const ctx = parseInputContext(val, cursor);
+      if (!ctx) return;
+
+      if (ctx.type === 'function') {
+        input.value = item.value;
+        input.selectionStart = input.selectionEnd = input.value.length;
+        // Trigger autocomplete for next arg
+        setTimeout(() => handleTerminalInput(), 50);
+        return;
+      }
+
+      if (ctx.type === 'helpTopic') {
+        input.value = 'help ' + item.value;
+        input.selectionStart = input.selectionEnd = input.value.length;
+        return;
+      }
+
+      // Replace the partial text with the selected value
+      const before = val.substring(0, cursor);
+      const after = val.substring(cursor);
+
+      if (ctx.type === 'domain' || ctx.type === 'service') {
+        // Find start of current argument
+        const csMatch = before.match(/^(callService\s*\(\s*)/);
+        if (csMatch) {
+          const prefix = csMatch[1];
+          const argsStr = before.substring(prefix.length);
+          // Split into completed args
+          const parts = [];
+          let temp = '', inStr = false, strCh = '', depth = 0;
+          for (let i = 0; i < argsStr.length; i++) {
+            const ch = argsStr[i];
+            if (inStr) {
+              if (ch === strCh && argsStr[i-1] !== '\\') inStr = false;
+              temp += ch;
+            } else if (ch === '\'' || ch === '"') {
+              inStr = true; strCh = ch; temp += ch;
+            } else if (ch === '{') { depth++; temp += ch; }
+            else if (ch === '}') { depth--; temp += ch; }
+            else if (ch === ',' && depth === 0) {
+              parts.push(temp.trim()); temp = '';
+            } else { temp += ch; }
+          }
+          const completedArgs = parts.join(', ');
+          input.value = prefix + (completedArgs ? completedArgs + ', ' : '') + item.value + after;
+          input.selectionStart = input.selectionEnd = (prefix + (completedArgs ? completedArgs + ', ' : '') + item.value).length;
+        }
+        return;
+      }
+
+      if (ctx.type === 'entity') {
+        // Replace partial entity_id
+        const partialLen = ctx.partial.length;
+        const insertPos = cursor - partialLen;
+        input.value = val.substring(0, insertPos) + item.value + after;
+        input.selectionStart = input.selectionEnd = insertPos + item.value.length;
+        return;
+      }
+    }
+
+    function hideAutocomplete() {
+      document.getElementById('autocompletePopup').classList.remove('active');
+      acItems = [];
+      acSelectedIdx = -1;
+    }
+
+    function executeTerminalInput() {
+      const input = document.getElementById('terminalInput');
+      const raw = input.value.trim();
+      if (!raw) return;
+
+      terminalHistory.push(raw);
+      terminalHistoryIdx = -1;
+      input.value = '';
+
+      appendTerminalCmd(raw);
+
+      // Handle help command locally
+      const helpMatch = raw.match(/^help\s*\(?\s*['"]?(\w*)['"]?\s*\)?$/);
+      if (helpMatch !== null) {
+        const topic = helpMatch[1];
+        if (topic && HELP_DETAILS[topic]) {
+          const h = HELP_DETAILS[topic];
+          let text = `${h.signature}\n\n${h.description}\n\nExamples:\n`;
+          text += h.examples.map(ex => `  ${ex}`).join('\n');
+          appendTerminalResult(text, false);
+        } else if (topic) {
+          appendTerminalResult(`Unknown command: ${topic}. Type 'help' to see available commands.`, true);
+        } else {
+          let text = 'Available commands:\n\n';
+          for (const fn of TAE_FUNCTIONS) {
+            const pad = ' '.repeat(Math.max(1, 22 - fn.name.length));
+            text += `  ${fn.name}(${fn.hint})${pad}${fn.desc}\n`;
+          }
+          text += '\nType help <command> for detailed help with examples.';
+          appendTerminalResult(text, false);
+        }
+        return;
+      }
+
+      // Parse the command
+      const parsed = parseTerminalCommand(raw);
+      if (!parsed) {
+        appendTerminalResult('Error: Could not parse command. Use: functionName(args)\nType help for available commands.', true);
+        return;
+      }
+
+      const cmdId = ++terminalCmdId;
+      send({ type: 'exec_command', id: cmdId, command: parsed.fn, args: parsed.args });
+
+      // Store pending command id for result routing
+      if (!window._pendingTerminalCmds) window._pendingTerminalCmds = new Map();
+      window._pendingTerminalCmds.set(cmdId, true);
+    }
+
+    function parseTerminalCommand(raw) {
+      // Match: functionName(args) or functionName('arg1', 'arg2', { ... })
+      const match = raw.match(/^(\w+)\s*\((.*)\)\s*$/s);
+      if (!match) {
+        // Try bare command with no parens
+        const bareMatch = raw.match(/^(\w+)$/);
+        if (bareMatch) return { fn: bareMatch[1], args: {} };
+        return null;
+      }
+
+      const fn = match[1];
+      const argsRaw = match[2].trim();
+
+      if (!argsRaw) return { fn, args: {} };
+
+      // Parse arguments based on function
+      try {
+        if (fn === 'callService') {
+          // callService('domain', 'service', { ... })
+          const argsParsed = parseArgList(argsRaw);
+          return {
+            fn,
+            args: {
+              domain: argsParsed[0],
+              service: argsParsed[1],
+              data: argsParsed[2] || {},
+            },
+          };
+        }
+        if (fn === 'getEntityState' || fn === 'fetchEntityState') {
+          const argsParsed = parseArgList(argsRaw);
+          return { fn, args: { entityId: argsParsed[0] } };
+        }
+        if (fn === 'getAllEntities') {
+          return { fn, args: {} };
+        }
+        // Generic: try to parse as JSON object
+        return { fn, args: JSON.parse('{' + argsRaw + '}') };
+      } catch (e) {
+        return { fn, args: { raw: argsRaw } };
+      }
+    }
+
+    function parseArgList(argsStr) {
+      // Parse comma-separated args that can be strings or objects
+      const result = [];
+      let i = 0, depth = 0, inStr = false, strCh = '', current = '';
+      while (i < argsStr.length) {
+        const ch = argsStr[i];
+        if (inStr) {
+          current += ch;
+          if (ch === strCh && argsStr[i-1] !== '\\') inStr = false;
+          i++; continue;
+        }
+        if (ch === '\'' || ch === '"') { inStr = true; strCh = ch; current += ch; i++; continue; }
+        if (ch === '{' || ch === '[') { depth++; current += ch; i++; continue; }
+        if (ch === '}' || ch === ']') { depth--; current += ch; i++; continue; }
+        if (ch === ',' && depth === 0) {
+          result.push(parseValue(current.trim()));
+          current = '';
+          i++; continue;
+        }
+        current += ch;
+        i++;
+      }
+      if (current.trim()) result.push(parseValue(current.trim()));
+      return result;
+    }
+
+    function parseValue(s) {
+      if (s.startsWith('{') || s.startsWith('[')) {
+        try {
+          // Convert JS object literals to JSON (handle unquoted keys)
+          const json = s.replace(/(\w+)\s*:/g, '"$1":').replace(/'/g, '"');
+          return JSON.parse(json);
+        } catch { return s; }
+      }
+      // Quoted strings — strip outer quotes
+      if ((s.startsWith("'") && s.endsWith("'")) || (s.startsWith('"') && s.endsWith('"'))) {
+        return s.slice(1, -1);
+      }
+      if (s === 'true') return true;
+      if (s === 'false') return false;
+      if (s === 'null') return null;
+      const num = Number(s);
+      if (!isNaN(num) && s !== '') return num;
+      return s;
+    }
+
+    function appendTerminalCmd(cmd) {
+      const output = document.getElementById('terminalOutput');
+      const div = document.createElement('div');
+      div.className = 'terminal-entry';
+      div.innerHTML = `<div class="terminal-cmd">${escapeHtml(cmd)}</div>`;
+      output.appendChild(div);
+      output.scrollTop = output.scrollHeight;
+      return div;
+    }
+
+    function appendTerminalResult(text, isError) {
+      const output = document.getElementById('terminalOutput');
+      const last = output.lastElementChild;
+      const div = document.createElement('div');
+      div.className = 'terminal-result' + (isError ? ' error' : '');
+      div.textContent = text;
+      if (last && last.classList.contains('terminal-entry')) {
+        last.appendChild(div);
+      } else {
+        output.appendChild(div);
+      }
+      output.scrollTop = output.scrollHeight;
+    }
+
+    function handleExecResult(msg) {
+      if (msg.success) {
+        const text = typeof msg.result === 'object' && msg.result !== null
+          ? JSON.stringify(msg.result, null, 2)
+          : String(msg.result ?? 'OK');
+        appendTerminalResult(text, false);
+      } else {
+        appendTerminalResult('Error: ' + (msg.error || 'Unknown error'), true);
+      }
+    }
+
+    // ─── Init ───────────────────────────────────────
+    setupResize();
+    setupSidebarResize();
+    setupLogScrollDetection();
+    connectWS();
+    initMonaco();
+
+    // Warn on page leave with unsaved changes
+    window.addEventListener('beforeunload', (e) => {
+      const count = getModifiedCount();
+      if (count > 0) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
+
+    // ─── Auto-scroll toggle ─────────────────────────
+    function toggleAutoScroll() {
+      autoScrollLocked = !autoScrollLocked;
+      document.getElementById('autoscrollBtn').classList.toggle('active', autoScrollLocked);
+      if (autoScrollLocked) {
+        const area = document.getElementById('logArea');
+        area.scrollTop = area.scrollHeight;
+      }
+    }
+
+    function setupLogScrollDetection() {
+      const area = document.getElementById('logArea');
+      area.addEventListener('scroll', () => {
+        // If user scrolled up, disable auto-scroll
+        const atBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 30;
+        if (!atBottom && autoScrollLocked) {
+          autoScrollLocked = false;
+          document.getElementById('autoscrollBtn').classList.remove('active');
+        }
+      });
+    }
+
+    // ─── Sidebar resize ─────────────────────────────
+    function setupSidebarResize() {
+      document.querySelectorAll('.sidebar-resize').forEach(handle => {
+        let startY, aboveH, belowH, aboveEl, belowEl;
+        handle.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          aboveEl = document.getElementById(handle.dataset.above);
+          belowEl = document.getElementById(handle.dataset.below);
+          startY = e.clientY;
+          aboveH = aboveEl.offsetHeight;
+          belowH = belowEl.offsetHeight;
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+        });
+        function onMove(e) {
+          const diff = e.clientY - startY;
+          const newAbove = Math.max(60, aboveH + diff);
+          const newBelow = Math.max(60, belowH - diff);
+          // Use flex-basis to control sizing
+          aboveEl.style.flex = '0 0 ' + newAbove + 'px';
+          belowEl.style.flex = '0 0 ' + newBelow + 'px';
+        }
+        function onUp() {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+        }
+      });
+    }
+
+    // ─── Storage viewer ─────────────────────────────
+    function refreshStorage() {
+      send({ type: 'get_storage' });
+    }
+
+    function startStoragePolling() {
+      if (storageRefreshTimer) clearInterval(storageRefreshTimer);
+      storageRefreshTimer = setInterval(() => {
+        if (connected) send({ type: 'get_storage' });
+      }, 3000);
+    }
+
+    function renderStorageViewer(persistent, temp) {
+      const container = document.getElementById('storageList');
+      const pKeys = Object.keys(persistent || {});
+      const tKeys = Object.keys(temp || {});
+
+      if (pKeys.length === 0 && tKeys.length === 0) {
+        container.innerHTML = '<div class="storage-empty">No storage data</div>';
+        return;
+      }
+
+      let html = '';
+
+      if (pKeys.length > 0) {
+        html += '<div class="storage-type-label">💾 Persistent</div>';
+        for (const ns of pKeys.sort()) {
+          html += renderStorageNamespace(ns, persistent[ns]);
+        }
+      }
+
+      if (tKeys.length > 0) {
+        html += '<div class="storage-type-label">⚡ Temporary</div>';
+        for (const ns of tKeys.sort()) {
+          html += renderStorageNamespace(ns, temp[ns]);
+        }
+      }
+
+      container.innerHTML = html;
+    }
+
+    function renderStorageNamespace(ns, entries) {
+      const keys = Object.keys(entries || {});
+      let html = `<div class="storage-ns">`;
+      html += `<div class="storage-ns-header" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? '' : 'none'; this.querySelector('.icon').textContent = this.nextElementSibling.style.display === 'none' ? '▸' : '▾'">`;
+      html += `<span class="icon">▾</span> ${escapeHtml(ns)} <span style="color:var(--text-dim); font-size:9px;">(${keys.length})</span>`;
+      html += `</div>`;
+      html += `<div class="storage-entries">`;
+      for (const key of keys.sort()) {
+        const val = entries[key];
+        let valStr;
+        if (typeof val === 'object' && val !== null) {
+          try { valStr = JSON.stringify(val); } catch { valStr = String(val); }
+        } else {
+          valStr = String(val);
+        }
+        html += `<div class="storage-entry" title="${escapeHtml(key)}: ${escapeHtml(valStr)}">`;
+        html += `<span class="storage-key">${escapeHtml(key)}:</span> `;
+        html += `<span class="storage-val">${escapeHtml(valStr)}</span>`;
+        html += `</div>`;
+      }
+      html += `</div></div>`;
+      return html;
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "name": "typescript-automation-engine",
+  "version": "1.6.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/main/index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "ws": "^8.18.0",
+    "better-sqlite3": "^11.7.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/express": "^4.17.0",
+    "@types/ws": "^8.5.0",
+    "@types/better-sqlite3": "^7.6.0"
+  }
+}
