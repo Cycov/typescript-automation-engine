@@ -4,16 +4,19 @@ Write and run Home Assistant automations in TypeScript with a managed runtime, b
 
 ## Features
 
-- **TypeScript automations** — Write automations in TypeScript with full type safety and autocomplete
-- **Worker thread isolation** — Automations run in a dedicated worker thread for clean reloads and fault isolation
-- **Built-in editor** — Monaco-based editor with TypeScript IntelliSense, syntax highlighting, and multi-tab support
-- **File management** — Create, rename, delete, and drag-drop files/folders directly in the UI
-- **Lifecycle management** — Predictable automation lifecycle (`onStart` → `onStop` → `onReload` → `onUnload`)
-- **HA integration** — Full WebSocket connection to Home Assistant for calling services, subscribing to events, and monitoring state changes
-- **Persistent storage** — SQLite-backed key/value storage that survives restarts, plus in-memory temp storage
-- **Real-time logging** — View logs in the UI with level and source filters; auto-scroll toggle to lock the view to the latest entry
-- **Storage viewer** — Inspect persistent (SQLite) and temporary (in-memory) storage in real time from the sidebar
-- **External sync** — Import/export automations to `/share/tae` for backup and version control
+- **TypeScript automations** - Write automations in TypeScript with full type safety and autocomplete
+- **Worker thread isolation** - Automations run in a dedicated worker thread for clean reloads and fault isolation
+- **Built-in editor** - Monaco-based editor with TypeScript IntelliSense, syntax highlighting, and multi-tab support
+- **AI Friendly-ness** - Provides ai context files and since the language is typescipt, common AI assistants can make automations with ease
+- **File management** - Create, rename, delete, and drag-drop files/folders directly in the UI
+- **Lifecycle management** - Predictable automation lifecycle (`onStart` → `onStop` → `onReload` → `onUnload`)
+- **HA integration** - Full WebSocket connection to Home Assistant for calling services, subscribing to events, and monitoring state changes
+- **Persistent storage** - SQLite-backed key/value storage that survives restarts, plus in-memory temp storage
+- **Real-time logging** - View logs in the UI with level and source filters; auto-scroll toggle to lock the view to the latest entry
+- **Storage viewer** - Inspect persistent (SQLite) and temporary (in-memory) storage in real time from the sidebar
+- **External sync** - Import/export automations to `/share/tae` for backup and version control
+
+<img src="images/overall.png" width="100%"/>
 
 ## Installation
 
@@ -131,7 +134,7 @@ export function onInit() {
 | `onReload()` | Engine reloads (all automations restart)                  | Handling reload-specific logic              |
 | `onUnload()` | Automation is permanently removed (before shutdown)       | Final cleanup                               |
 
-**Important:** Event subscriptions are automatically cleaned up on stop — you do NOT need to manually unsubscribe in `onStop()`.
+**Important:** Event subscriptions are automatically cleaned up on stop - you do NOT need to manually unsubscribe in `onStop()`.
 
 ## API Reference
 
@@ -159,9 +162,9 @@ const result = await this.callService(domain, service, data?)
 
 | Parameter | Type     | Description                                                    |
 |-----------|----------|----------------------------------------------------------------|
-| `domain`  | `string` | The service domain — the part before the dot in HA service calls. This is the integration or platform name. Examples: `"light"`, `"switch"`, `"climate"`, `"notify"`, `"media_player"`, `"automation"`, `"scene"`, `"script"`, `"input_boolean"`, `"input_number"`, `"input_select"`, `"input_text"`, `"cover"`, `"fan"`, `"vacuum"`, `"lock"`, `"alarm_control_panel"`, `"camera"`, `"tts"`, `"number"`, `"select"`, `"button"` |
-| `service` | `string` | The service action — the part after the dot. This tells HA what to do. Examples: `"turn_on"`, `"turn_off"`, `"toggle"`, `"set_temperature"`, `"send_message"`, `"set_hvac_mode"`, `"set_value"`, `"select_option"`, `"press"`, `"set_cover_position"`, `"set_speed"`, `"start"`, `"stop"`, `"set_volume_level"`, `"play_media"` |
-| `data`    | `object` | Optional service data payload. Almost always includes `entity_id` to target specific entities. Other parameters are service-specific — check HA Developer Tools → Services for the available fields for each service. |
+| `domain`  | `string` | The service domain - the part before the dot in HA service calls. This is the integration or platform name. Examples: `"light"`, `"switch"`, `"climate"`, `"notify"`, `"media_player"`, `"automation"`, `"scene"`, `"script"`, `"input_boolean"`, `"input_number"`, `"input_select"`, `"input_text"`, `"cover"`, `"fan"`, `"vacuum"`, `"lock"`, `"alarm_control_panel"`, `"camera"`, `"tts"`, `"number"`, `"select"`, `"button"` |
+| `service` | `string` | The service action - the part after the dot. This tells HA what to do. Examples: `"turn_on"`, `"turn_off"`, `"toggle"`, `"set_temperature"`, `"send_message"`, `"set_hvac_mode"`, `"set_value"`, `"select_option"`, `"press"`, `"set_cover_position"`, `"set_speed"`, `"start"`, `"stop"`, `"set_volume_level"`, `"play_media"` |
+| `data`    | `object` | Optional service data payload. Almost always includes `entity_id` to target specific entities. Other parameters are service-specific - check HA Developer Tools → Services for the available fields for each service. |
 | **Returns** | `Promise<any>` | Resolves with the HA service response (usually `null` for fire-and-forget services). |
 
 **Examples:**
@@ -206,7 +209,7 @@ await this.callService('switch', 'toggle', {
 
 ### Subscribing to Events
 
-Listen for native Home Assistant events. This is a low-level API — for state changes, prefer `subscribeToStateChangeEvent` instead.
+Listen for native Home Assistant events. This is a low-level API - for state changes, prefer `subscribeToStateChangeEvent` instead.
 
 ```typescript
 // Subscribe to a specific HA event type
@@ -217,7 +220,7 @@ const unsub = this.subscribeToEvent(eventType, callback);
 |-------------|------------|----------------------------------------------------------------|
 | `eventType` | `string`   | HA event type to listen for. Common types: `"state_changed"` (any entity state update), `"call_service"` (any service call), `"zha_event"` (Zigbee Home Automation device events), `"deconz_event"` (deCONZ device events), `"timer.finished"` (timer expired), `"automation_triggered"` (native HA automation triggered), `"script_started"`, `"homeassistant_start"`, `"homeassistant_stop"`. Find event types in HA Developer Tools → Events. |
 | `callback`  | `function` | Called each time the event fires. Receives the full HA event object with properties: `event_type` (string), `data` (event-specific payload object), `origin` ("LOCAL" or "REMOTE"), `time_fired` (ISO timestamp), `context` ({ id, parent_id, user_id }). |
-| **Returns** | `() => void` | An unsubscribe function. Call it to stop listening before automation stop. Not required — all subscriptions are auto-cleaned on stop. |
+| **Returns** | `() => void` | An unsubscribe function. Call it to stop listening before automation stop. Not required - all subscriptions are auto-cleaned on stop. |
 
 ```typescript
 // Listen for ZHA (Zigbee) remote button events
@@ -243,15 +246,15 @@ The most common way to react to entity changes. Fires whenever a specific entity
 // Watch a specific entity
 const unsub = this.subscribeToStateChangeEvent(entityId, callback);
 
-// Watch ALL entity state changes (use sparingly — fires frequently)
+// Watch ALL entity state changes (use sparingly - fires frequently)
 const unsub = this.onStateChange(callback);
 ```
 
 | Parameter  | Type       | Description                                                    |
 |------------|------------|----------------------------------------------------------------|
 | `entityId` | `string`   | The full entity ID to watch. This is the entity's unique identifier in HA (e.g., `"binary_sensor.front_door"`, `"sensor.living_room_temperature"`, `"light.bedroom"`, `"switch.coffee_maker"`, `"person.john"`). Find entity IDs in HA → Settings → Devices & Services → Entities. |
-| `callback` | `function` | Called with a `StateChangeData` object containing: `entity_id` (string — the entity that changed), `old_state` (previous `HAEntityState \| null` — null if entity was just created), `new_state` (new `HAEntityState \| null` — null if entity was removed). Each state object has: `.state` (string value like `"on"`, `"off"`, `"22.5"`, `"home"`), `.attributes` (object with device-specific data), `.last_changed` (ISO timestamp when state value changed), `.last_updated` (ISO timestamp when any attribute changed). |
-| **Returns** | `() => void` | Unsubscribe function. Optional — auto-cleaned on stop. |
+| `callback` | `function` | Called with a `StateChangeData` object containing: `entity_id` (string - the entity that changed), `old_state` (previous `HAEntityState \| null` - null if entity was just created), `new_state` (new `HAEntityState \| null` - null if entity was removed). Each state object has: `.state` (string value like `"on"`, `"off"`, `"22.5"`, `"home"`), `.attributes` (object with device-specific data), `.last_changed` (ISO timestamp when state value changed), `.last_updated` (ISO timestamp when any attribute changed). |
+| **Returns** | `() => void` | Unsubscribe function. Optional - auto-cleaned on stop. |
 
 ```typescript
 // Monitor a door sensor
@@ -279,10 +282,10 @@ this.onStateChange((data) => {
 Read the current state of any entity without subscribing to changes.
 
 ```typescript
-// From cache (fast, no network call — may be a few seconds stale)
+// From cache (fast, no network call - may be a few seconds stale)
 const state = await this.getEntityState('sensor.temperature');
 
-// Live from HA (network call to HA API — always fresh but slower)
+// Live from HA (network call to HA API - always fresh but slower)
 const state = await this.fetchEntityState('sensor.temperature');
 ```
 
@@ -326,7 +329,7 @@ this.debug('Detailed info');              // DEBUG level
 this.log('Verbose detail', LogLevel.Debug);     // Uses DEBUG level
 this.log('Critical issue', LogLevel.Error);     // Uses ERROR level
 
-// Log objects — automatically pretty-printed in console and UI
+// Log objects - automatically pretty-printed in console and UI
 this.log({ entities: ['light.a', 'light.b'], brightness: 200 });
 
 // Log with extra data attached (rendered as expandable block in UI)
@@ -350,7 +353,7 @@ import { LogLevel } from 'tae';
 
 ### Storage
 
-Each automation gets its own namespaced key-value storage. Keys from different automations never collide — the namespace is the automation's ID.
+Each automation gets its own namespaced key-value storage. Keys from different automations never collide - the namespace is the automation's ID.
 
 | Storage Type | Backed By | Survives Restart | Use For |
 |-------------|-----------|------------------|---------|
@@ -375,7 +378,7 @@ Values are JSON-serialized, so you can store strings, numbers, booleans, arrays,
 
 ### Standalone Functions
 
-These functions provide the same capabilities as instance methods but can be used outside of an automation class — e.g., in `onInit()` or utility modules.
+These functions provide the same capabilities as instance methods but can be used outside of an automation class - e.g., in `onInit()` or utility modules.
 
 ```typescript
 import {
@@ -426,19 +429,19 @@ The addon provides a full-featured IDE accessible from the Home Assistant sideba
 
 The UI is divided into four areas:
 
-1. **Header bar** (top) — Shows connection status, and buttons for Export, Import, Clear Logs, Work with AI, and Reload.
-2. **Sidebar** (left) — Two sections:
-   - **Automations** — Lists all registered automations with their state (running/stopped/error). Hover to reveal Start/Stop buttons.
-   - **Files** — File tree with buttons to create files (+📄), create folders (+📁), and refresh (↻).
-3. **Editor** (center) — Monaco-based TypeScript editor with tabs. Supports:
+1. **Header bar** (top) - Shows connection status, and buttons for Export, Import, Clear Logs, Work with AI, and Reload.
+2. **Sidebar** (left) - Two sections:
+   - **Automations** - Lists all registered automations with their state (running/stopped/error). Hover to reveal Start/Stop buttons.
+   - **Files** - File tree with buttons to create files (+📄), create folders (+📁), and refresh (↻).
+3. **Editor** (center) - Monaco-based TypeScript editor with tabs. Supports:
    - Full TypeScript IntelliSense with TAE API autocomplete
    - Multi-tab editing (click files in tree to open)
    - `Ctrl+S` / `Cmd+S` to save the current file
    - Unsaved changes warning when closing tabs
    - Syntax highlighting, auto-formatting, word wrap
-4. **Bottom panel** — Two tabs:
-   - **Output** — Real-time log output with level and source filters, color-coded levels, and auto-scroll
-   - **Terminal** — Interactive console for calling TAE functions with smart autocomplete
+4. **Bottom panel** - Two tabs:
+   - **Output** - Real-time log output with level and source filters, color-coded levels, and auto-scroll
+   - **Terminal** - Interactive console for calling TAE functions with smart autocomplete
 
 ### File Tree Operations
 
@@ -524,17 +527,17 @@ help callService
 
 The terminal provides context-aware autocomplete as you type:
 
-- **Function names** — Suggested at the start of input. Press `Tab` to show all functions.
-- **Service domains** — When typing the first argument of `callService`, suggests domains (`light`, `switch`, `climate`, etc.).
-- **Service actions** — When typing the second argument, suggests services filtered by the chosen domain (e.g., `turn_on`, `turn_off` for `light`).
-- **Entity IDs** — Autocomplete for entity IDs when typing inside `getEntityState()`, `fetchEntityState()`, or within the `entity_id` field of a `callService` data object. Entities are filtered by domain when applicable.
-- **Help topics** — When typing after `help`, suggests available function names.
+- **Function names** - Suggested at the start of input. Press `Tab` to show all functions.
+- **Service domains** - When typing the first argument of `callService`, suggests domains (`light`, `switch`, `climate`, etc.).
+- **Service actions** - When typing the second argument, suggests services filtered by the chosen domain (e.g., `turn_on`, `turn_off` for `light`).
+- **Entity IDs** - Autocomplete for entity IDs when typing inside `getEntityState()`, `fetchEntityState()`, or within the `entity_id` field of a `callService` data object. Entities are filtered by domain when applicable.
+- **Help topics** - When typing after `help`, suggests available function names.
 
 Navigate autocomplete with:
-- `Tab` — Open autocomplete or accept the selected suggestion
-- `Arrow Up` / `Arrow Down` — Navigate through suggestions
-- `Enter` — Accept the selected suggestion
-- `Escape` — Close the autocomplete popup
+- `Tab` - Open autocomplete or accept the selected suggestion
+- `Arrow Up` / `Arrow Down` - Navigate through suggestions
+- `Enter` - Accept the selected suggestion
+- `Escape` - Close the autocomplete popup
 
 #### Command History
 
@@ -544,14 +547,14 @@ Press `Arrow Up` / `Arrow Down` when autocomplete is closed to navigate through 
 
 Click the **Work with AI** button in the toolbar to open a dialog for downloading context files to use with AI assistants (e.g., GitHub Copilot, ChatGPT):
 
-- **Download Entities (.txt)** — Downloads a categorized list of all your Home Assistant entities grouped by domain, including friendly names, states, device classes, and units.
-- **Download SKILL.md** — Downloads the TAE skill/instruction file that provides AI assistants with context about the TAE API, your project structure, and how to write automations.
+- **Download Entities (.txt)** - Downloads a categorized list of all your Home Assistant entities grouped by domain, including friendly names, states, device classes, and units.
+- **Download SKILL.md** - Downloads the TAE skill/instruction file that provides AI assistants with context about the TAE API, your project structure, and how to write automations.
 
 ## Configuration
 
 | Option     | Default      | Description                                      |
 |------------|--------------|--------------------------------------------------|
-| `log_level`| `info`       | Minimum log level for **console output**: `debug`, `info`, `warn`, `error`. Note: all log levels are always visible in the UI regardless of this setting — the UI has its own level filter. |
+| `log_level`| `info`       | Minimum log level for **console output**: `debug`, `info`, `warn`, `error`. Note: all log levels are always visible in the UI regardless of this setting - the UI has its own level filter. |
 | `sync_path`| `/share/tae` | External directory for import/export sync        |
 
 ## Architecture
@@ -594,7 +597,7 @@ Click the **Work with AI** button in the toolbar to open a dialog for downloadin
 
 - **Child process blocking**: `child_process` module is blocked in automations for security.
 - **Path traversal protection**: All file operations are sandboxed to the automations directory.
-- **Supervisor token**: Authentication via HA supervisor token — never exposed to automations.
+- **Supervisor token**: Authentication via HA supervisor token - never exposed to automations.
 
 ## Troubleshooting
 
@@ -611,7 +614,7 @@ Click the **Work with AI** button in the toolbar to open a dialog for downloadin
 
 ### 1.6.0
 
-- **Feature**: Storage viewer in the sidebar — real-time view of persistent and temporary storage grouped by namespace
+- **Feature**: Storage viewer in the sidebar - real-time view of persistent and temporary storage grouped by namespace
 - **Feature**: Resizable sidebar panels (Automations, Files, Storage) with drag handles
 - **Feature**: Auto-scroll toggle in the output panel
 - **Feature**: Browser confirmation dialog when navigating away with unsaved changes
@@ -622,7 +625,7 @@ Click the **Work with AI** button in the toolbar to open a dialog for downloadin
 
 - **Fix**: Terminal `callService` now correctly parses object arguments with string values (e.g., `{entity_id: 'light.x', brightness: 128}`)
 - **Fix**: Terminal `callService` now sends `entity_id` via the HA `target` field for proper service targeting
-- **Feature**: `help` command in terminal — `help` shows all commands, `help <command>` shows detailed help with examples
+- **Feature**: `help` command in terminal - `help` shows all commands, `help <command>` shows detailed help with examples
 - **Feature**: Autocomplete for `help <command>` suggests available function names
 - **Docs**: Added terminal usage documentation to README
 - **Docs**: Added file saving behavior, Work with AI, and changelog sections to README
@@ -630,12 +633,12 @@ Click the **Work with AI** button in the toolbar to open a dialog for downloadin
 ### 1.4.0
 
 - **Fix**: SKILL.md download now works (file is copied into Docker image; server uses fallback paths)
-- **Feature**: Terminal tab in bottom panel — interactive console for calling TAE functions (`callService`, `getEntityState`, `fetchEntityState`, `getAllEntities`)
+- **Feature**: Terminal tab in bottom panel - interactive console for calling TAE functions (`callService`, `getEntityState`, `fetchEntityState`, `getAllEntities`)
 - **Feature**: Context-aware autocomplete in terminal for domains, services (grouped by domain), entity IDs, and function names
 - **Feature**: Reload button shows orange badge with unsaved file count
 - **Feature**: Auto-save all modified files before reload
 - **Feature**: Unsaved changes dialog when closing a modified tab (Save & Close / Discard / Cancel)
-- **Feature**: Work with AI button — download entities list and SKILL.md for AI assistants
+- **Feature**: Work with AI button - download entities list and SKILL.md for AI assistants
 
 ### 1.3.0
 
