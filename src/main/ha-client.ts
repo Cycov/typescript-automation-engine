@@ -22,6 +22,7 @@ export class HAClient {
   private pendingRequests = new Map<number, { resolve: Function; reject: Function }>();
   private eventSubscriptions = new Map<number, EventCallback>();
   private stateChangeCallbacks: StateChangeCallback[] = [];
+  private activeEventSubs: Array<{ eventType: string; callback: EventCallback; currentId: number }> = [];
   private allStates = new Map<string, HAEntityState>();
   private connected = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -69,6 +70,7 @@ export class HAClient {
           this.logFn("info", "ha-client", "Authenticated with Home Assistant");
           this.fetchAllStates()
             .then(() => this.subscribeToAllEvents())
+            .then(() => this.resubscribeActiveEvents())
             .then(() => {
               this.onConnectCb?.();
               resolve();
@@ -239,20 +241,44 @@ export class HAClient {
   }
 
   async subscribeToEvent(eventType: string, callback: EventCallback): Promise<() => void> {
-    const id = this.nextId();
-    const msg = { id, type: "subscribe_events", event_type: eventType };
+    const sub = { eventType, callback, currentId: 0 };
+    this.activeEventSubs.push(sub);
+    await this.establishEventSub(sub);
 
-    this.eventSubscriptions.set(id, callback);
+    return () => {
+      this.eventSubscriptions.delete(sub.currentId);
+      const idx = this.activeEventSubs.indexOf(sub);
+      if (idx >= 0) this.activeEventSubs.splice(idx, 1);
+    };
+  }
+
+  private async establishEventSub(sub: { eventType: string; callback: EventCallback; currentId: number }): Promise<void> {
+    const id = this.nextId();
+    // Clean up old subscription entry if re-subscribing
+    if (sub.currentId > 0) {
+      this.eventSubscriptions.delete(sub.currentId);
+    }
+    sub.currentId = id;
+    const msg = { id, type: "subscribe_events", event_type: sub.eventType };
+    this.eventSubscriptions.set(id, sub.callback);
 
     await new Promise<void>((resolve, reject) => {
       if (!this.ws) return reject(new Error("Not connected"));
       this.pendingRequests.set(id, { resolve, reject });
       this.ws.send(JSON.stringify(msg));
     });
+  }
 
-    return () => {
-      this.eventSubscriptions.delete(id);
-    };
+  private async resubscribeActiveEvents(): Promise<void> {
+    if (this.activeEventSubs.length === 0) return;
+    this.logFn("info", "ha-client", `Re-subscribing ${this.activeEventSubs.length} event subscription(s)...`);
+    for (const sub of this.activeEventSubs) {
+      try {
+        await this.establishEventSub(sub);
+      } catch (e: any) {
+        this.logFn("error", "ha-client", `Re-subscribe failed for ${sub.eventType}: ${e.message}`);
+      }
+    }
   }
 
   isConnected(): boolean {

@@ -524,6 +524,21 @@ wss.on("connection", (ws) => {
           }
           break;
 
+        case "set_storage":
+          try {
+            const { namespace: ns, key: sKey, value: sVal, persistent: isPersistent } = msg;
+            if (!ns || !sKey) throw new Error("namespace and key are required");
+            if (isPersistent) {
+              storage.persistentSet(ns, sKey, sVal);
+            } else {
+              storage.tempSet(ns, sKey, sVal);
+            }
+            ws.send(JSON.stringify({ type: "storage_saved", success: true }));
+          } catch (e: any) {
+            ws.send(JSON.stringify({ type: "error", message: `Storage set error: ${e.message}` }));
+          }
+          break;
+
         case "exec_command":
           try {
             const cmdResult = await executeTerminalCommand(msg.command, msg.args, haClient, logger);

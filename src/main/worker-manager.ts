@@ -47,6 +47,10 @@ export class WorkerManager {
   }
 
   async start(): Promise<void> {
+    if (this.worker) {
+      this.logger.log("debug", "worker-mgr", "Worker already running, skipping start");
+      return;
+    }
     if (!this.haClient.isConnected()) {
       this.logger.log("warn", "worker-mgr", "HA not connected yet, worker will start when ready");
       return;

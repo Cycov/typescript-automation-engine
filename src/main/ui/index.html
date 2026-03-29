@@ -116,13 +116,26 @@
     /* ─── Left Sidebar ──────────────────────────────── */
     .sidebar {
       width: 260px;
+      min-width: 160px;
+      max-width: 500px;
       background: var(--bg-secondary);
       border-right: 1px solid var(--border);
       display: flex;
       flex-direction: column;
       flex-shrink: 0;
       overflow: hidden;
+      position: relative;
     }
+    .sidebar-h-resize {
+      position: absolute;
+      top: 0;
+      right: -3px;
+      width: 6px;
+      height: 100%;
+      cursor: col-resize;
+      z-index: 10;
+    }
+    .sidebar-h-resize:hover { background: var(--accent); }
     .sidebar-section {
       display: flex;
       flex-direction: column;
@@ -130,13 +143,25 @@
       min-height: 60px;
     }
     .sidebar-resize {
-      height: 4px;
+      height: 5px;
       cursor: row-resize;
-      background: transparent;
+      background: var(--border);
       flex-shrink: 0;
       transition: background 0.2s;
+      position: relative;
+    }
+    .sidebar-resize::after {
+      content: '⋯';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 8px;
+      color: var(--text-dim);
+      letter-spacing: 1px;
     }
     .sidebar-resize:hover { background: var(--accent); }
+    .sidebar-resize:hover::after { color: var(--bg); }
     .sidebar-header {
       font-size: 11px;
       text-transform: uppercase;
@@ -301,6 +326,9 @@
     }
     .tab:hover .close-tab { opacity: 1; }
     .tab .close-tab:hover { color: var(--text); background: var(--bg-input); }
+    .tab[draggable="true"] { cursor: grab; }
+    .tab.drag-over { border-left: 2px solid var(--accent); }
+    .tab.dragging { opacity: 0.4; }
 
     /* Editor container */
     .editor-container {
@@ -632,7 +660,9 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      cursor: pointer;
     }
+    .storage-val:hover { color: var(--accent); text-decoration: underline; }
     .storage-type-label {
       font-size: 9px;
       text-transform: uppercase;
@@ -686,7 +716,7 @@
       <button class="btn" onclick="showYamlToTsDialog()" title="Convert YAML attributes to TypeScript interface">YAML→TS</button>
       <button class="btn" onclick="showImportDialog()">Import</button>
       <button class="btn" onclick="showAiDialog()" title="Export entities/devices and SKILL.md for AI editing">Work with AI</button>
-      <button class="btn" onclick="clearLogs()">Clear Logs</button>
+      <button class="btn" onclick="showHelpPanel()" title="Keyboard shortcuts & help">Help</button>
       <button class="btn btn-reload" onclick="reload()" id="reloadBtn">⟳ Reload</button>
     </div>
   </header>
@@ -694,6 +724,7 @@
   <div class="main-layout">
     <!-- Left Sidebar -->
     <div class="sidebar" id="sidebar">
+      <div class="sidebar-h-resize" id="sidebarHResize"></div>
       <!-- Automations -->
       <div class="sidebar-section" id="sidebarAutomations" style="flex: 1;">
         <div class="sidebar-header">
@@ -760,6 +791,7 @@
           </div>
           <div class="log-filters" id="logFilters">
             <button class="autoscroll-btn active" id="autoscrollBtn" onclick="toggleAutoScroll()" title="Auto-scroll to latest log">⤓ Auto</button>
+            <button class="autoscroll-btn" onclick="clearLogs()" title="Clear all logs">✕ Clear</button>
             <select id="logLevelFilter" onchange="applyLogFilter()">
               <option value="all">All Levels</option>
               <option value="debug">Debug</option>
@@ -914,6 +946,51 @@ supported_features: 40"></textarea>
       </div>
       <div class="dialog-actions">
         <button class="btn" onclick="closeAiDialog()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Help panel -->
+  <div class="dialog-overlay" id="helpDialog">
+    <div class="dialog" style="min-width: 440px;">
+      <h3>⌨ Keyboard Shortcuts</h3>
+      <div style="font-size: 12px; line-height: 2;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr><td style="color: var(--accent); padding: 2px 12px 2px 0;">Ctrl+S</td><td>Save current file</td></tr>
+          <tr><td style="color: var(--accent); padding: 2px 12px 2px 0;">Ctrl+Shift+S</td><td>Save all open files</td></tr>
+          <tr><td style="color: var(--accent); padding: 2px 12px 2px 0;">Delete</td><td>Delete selected file in sidebar</td></tr>
+          <tr><td style="color: var(--accent); padding: 2px 12px 2px 0;">Ctrl+Click</td><td>Go to definition</td></tr>
+          <tr><td style="color: var(--accent); padding: 2px 12px 2px 0;">Tab</td><td>Open / accept autocomplete (terminal)</td></tr>
+          <tr><td style="color: var(--accent); padding: 2px 12px 2px 0;">↑ / ↓</td><td>Navigate autocomplete or command history</td></tr>
+          <tr><td style="color: var(--accent); padding: 2px 12px 2px 0;">Escape</td><td>Close autocomplete / dialogs</td></tr>
+        </table>
+      </div>
+      <div style="margin-top: 12px; font-size: 12px; line-height: 2;">
+        <div style="font-weight: 600; margin-bottom: 4px; color: var(--text-dim);">UI Tips</div>
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr><td style="color: var(--yellow); padding: 2px 12px 2px 0; white-space: nowrap;">Drag tabs</td><td>Reorder editor tabs</td></tr>
+          <tr><td style="color: var(--yellow); padding: 2px 12px 2px 0; white-space: nowrap;">Sidebar edge</td><td>Drag right edge to resize sidebar width</td></tr>
+          <tr><td style="color: var(--yellow); padding: 2px 12px 2px 0; white-space: nowrap;">Section handles</td><td>Drag handles between sidebar sections to resize</td></tr>
+          <tr><td style="color: var(--yellow); padding: 2px 12px 2px 0; white-space: nowrap;">Double-click value</td><td>Edit storage values in the sidebar</td></tr>
+          <tr><td style="color: var(--yellow); padding: 2px 12px 2px 0; white-space: nowrap;">⤓ Auto button</td><td>Toggle auto-scroll in the output panel</td></tr>
+        </table>
+      </div>
+      <div class="dialog-actions" style="margin-top: 16px;">
+        <button class="btn" onclick="closeHelpPanel()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Storage edit dialog -->
+  <div class="dialog-overlay" id="storageEditDialog">
+    <div class="dialog" style="min-width: 480px;">
+      <h3>Edit Storage Value</h3>
+      <p id="storageEditInfo" style="font-size: 11px;"></p>
+      <textarea id="storageEditTextarea" style="min-height: 140px;"></textarea>
+      <div id="storageEditError" style="display: none; color: var(--red); font-size: 11px; margin-bottom: 8px; padding: 6px 8px; background: rgba(248,81,73,0.1); border-radius: 4px;"></div>
+      <div class="dialog-actions">
+        <button class="btn" onclick="closeStorageEditDialog()">Cancel</button>
+        <button class="btn btn-accent" onclick="saveStorageEdit()">Save</button>
       </div>
     </div>
   </div>
@@ -1397,6 +1474,27 @@ supported_features: 40"></textarea>
 
     // ─── Keyboard handler for Delete key ────────────
     document.addEventListener('keydown', (e) => {
+      // Escape: close any open dialog
+      if (e.key === 'Escape') {
+        if (document.getElementById('helpDialog').classList.contains('active')) { closeHelpPanel(); return; }
+        if (document.getElementById('storageEditDialog').classList.contains('active')) { closeStorageEditDialog(); return; }
+      }
+      // Ctrl+Shift+S: save all
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'S') {
+        e.preventDefault();
+        saveAllFiles();
+        return;
+      }
+      // Ctrl+S: save current (when not in editor)
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 's') {
+        const active = document.activeElement;
+        const isInEditor = active && active.closest('.editor-container');
+        if (!isInEditor) {
+          e.preventDefault();
+          saveCurrentFile();
+          return;
+        }
+      }
       if (e.key === 'Delete' && selectedFilePath) {
         // Only if focus is in the file tree area or nothing specific is focused
         const active = document.activeElement;
@@ -1533,11 +1631,49 @@ supported_features: 40"></textarea>
         const name = path.split('/').pop();
         const isActive = path === activeTab;
         return `
-          <div class="tab${isActive ? ' active' : ''}" onclick="switchToTab('${escapeAttr(path)}')">
+          <div class="tab${isActive ? ' active' : ''}" draggable="true" data-path="${escapeAttr(path)}"
+               onclick="switchToTab('${escapeAttr(path)}')"
+               ondragstart="onTabDragStart(event, '${escapeAttr(path)}')"
+               ondragover="onTabDragOver(event)"
+               ondrop="onTabDrop(event, '${escapeAttr(path)}')"
+               ondragend="onTabDragEnd(event)"
+               ondragleave="event.currentTarget.classList.remove('drag-over')">
             ${escapeHtml(name)}${info.modified ? '<span class="modified">●</span>' : ''}
             <span class="close-tab" onclick="event.stopPropagation(); closeTab('${escapeAttr(path)}', false)">&times;</span>
           </div>`;
       }).join('');
+    }
+
+    let draggedTabPath = null;
+    function onTabDragStart(e, path) {
+      draggedTabPath = path;
+      e.dataTransfer.effectAllowed = 'move';
+      e.currentTarget.classList.add('dragging');
+    }
+    function onTabDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      e.currentTarget.classList.add('drag-over');
+    }
+    function onTabDrop(e, targetPath) {
+      e.preventDefault();
+      e.currentTarget.classList.remove('drag-over');
+      if (!draggedTabPath || draggedTabPath === targetPath) return;
+      // Reorder openTabs
+      const entries = Array.from(openTabs.entries());
+      const fromIdx = entries.findIndex(([p]) => p === draggedTabPath);
+      const toIdx = entries.findIndex(([p]) => p === targetPath);
+      if (fromIdx < 0 || toIdx < 0) return;
+      const [removed] = entries.splice(fromIdx, 1);
+      entries.splice(toIdx, 0, removed);
+      openTabs.clear();
+      for (const [p, info] of entries) openTabs.set(p, info);
+      renderTabs();
+    }
+    function onTabDragEnd(e) {
+      draggedTabPath = null;
+      e.currentTarget.classList.remove('dragging');
+      document.querySelectorAll('.tab.drag-over').forEach(t => t.classList.remove('drag-over'));
     }
 
     function saveCurrentFile() {
@@ -1545,6 +1681,20 @@ supported_features: 40"></textarea>
         const tab = openTabs.get(activeTab);
         const content = tab.model.getValue();
         send({ type: 'write_file', path: activeTab, content });
+      }
+    }
+
+    function saveAllFiles() {
+      let saved = 0;
+      for (const [filePath, tab] of openTabs) {
+        if (tab.modified) {
+          const content = tab.model.getValue();
+          send({ type: 'write_file', path: filePath, content });
+          saved++;
+        }
+      }
+      if (saved > 0) {
+        addLocalLog('info', 'ui', `Saved ${saved} file(s)`);
       }
     }
 
@@ -1605,6 +1755,11 @@ supported_features: 40"></textarea>
           saveCurrentFile();
         });
 
+        // Ctrl+Shift+S to save all
+        monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyS, () => {
+          saveAllFiles();
+        });
+
         // Ctrl+click go-to-definition: navigate to the file if it's open or in the file tree
         monacoEditor.onMouseDown((e) => {
           if (e.event.ctrlKey && e.target.type === monaco.editor.MouseTargetType.CONTENT_TEXT) {
@@ -1663,6 +1818,9 @@ supported_features: 40"></textarea>
         }
 
         monacoReady = true;
+
+        // Restore session tabs if any were persisted
+        applySessionRestore();
 
         // Show welcome if no tabs
         if (openTabs.size === 0) {
@@ -2893,17 +3051,25 @@ supported_features: 40"></textarea>
     // ─── Init ───────────────────────────────────────
     setupResize();
     setupSidebarResize();
+    setupHorizontalSidebarResize();
     setupLogScrollDetection();
+    restoreSession();
     connectWS();
     initMonaco();
 
     // Warn on page leave with unsaved changes
     window.addEventListener('beforeunload', (e) => {
+      persistSession();
       const count = getModifiedCount();
       if (count > 0) {
         e.preventDefault();
         e.returnValue = '';
       }
+    });
+
+    // Also persist on visibility change (covers mobile tab switch, HA sidebar toggle)
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) persistSession();
     });
 
     // ─── Auto-scroll toggle ─────────────────────────
@@ -2984,21 +3150,23 @@ supported_features: 40"></textarea>
       if (pKeys.length > 0) {
         html += '<div class="storage-type-label">💾 Persistent</div>';
         for (const ns of pKeys.sort()) {
-          html += renderStorageNamespace(ns, persistent[ns]);
+          html += renderStorageNamespace(ns, persistent[ns], true);
         }
       }
 
       if (tKeys.length > 0) {
         html += '<div class="storage-type-label">⚡ Temporary</div>';
         for (const ns of tKeys.sort()) {
-          html += renderStorageNamespace(ns, temp[ns]);
+          html += renderStorageNamespace(ns, temp[ns], false);
         }
       }
 
       container.innerHTML = html;
+      // Cache for editing
+      window._storageCache = { persistent: persistent || {}, temp: temp || {} };
     }
 
-    function renderStorageNamespace(ns, entries) {
+    function renderStorageNamespace(ns, entries, isPersistent) {
       const keys = Object.keys(entries || {});
       let html = `<div class="storage-ns">`;
       html += `<div class="storage-ns-header" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? '' : 'none'; this.querySelector('.icon').textContent = this.nextElementSibling.style.display === 'none' ? '▸' : '▾'">`;
@@ -3013,13 +3181,202 @@ supported_features: 40"></textarea>
         } else {
           valStr = String(val);
         }
+        const pFlag = isPersistent ? 'true' : 'false';
         html += `<div class="storage-entry" title="${escapeHtml(key)}: ${escapeHtml(valStr)}">`;
         html += `<span class="storage-key">${escapeHtml(key)}:</span> `;
-        html += `<span class="storage-val">${escapeHtml(valStr)}</span>`;
+        html += `<span class="storage-val" ondblclick="openStorageEdit('${escapeAttr(ns)}', '${escapeAttr(key)}', ${pFlag})">${escapeHtml(valStr)}</span>`;
         html += `</div>`;
       }
       html += `</div></div>`;
       return html;
+    }
+
+    // ─── Help panel ─────────────────────────────────
+    function showHelpPanel() {
+      document.getElementById('helpDialog').classList.add('active');
+    }
+    function closeHelpPanel() {
+      document.getElementById('helpDialog').classList.remove('active');
+    }
+
+    // ─── Storage edit dialog ────────────────────────
+    let storageEditCtx = null; // { namespace, key, persistent, originalType }
+
+    function openStorageEdit(ns, key, isPersistent) {
+      const cache = window._storageCache || {};
+      const source = isPersistent ? cache.persistent : cache.temp;
+      const nsData = source && source[ns];
+      if (!nsData || !(key in nsData)) return;
+
+      const val = nsData[key];
+      let textVal, origType;
+      if (val === null || val === undefined) {
+        textVal = String(val);
+        origType = 'string';
+      } else if (typeof val === 'object') {
+        textVal = JSON.stringify(val, null, 2);
+        origType = 'object';
+      } else if (typeof val === 'boolean') {
+        textVal = String(val);
+        origType = 'boolean';
+      } else if (typeof val === 'number') {
+        textVal = String(val);
+        origType = 'number';
+      } else {
+        textVal = String(val);
+        origType = 'string';
+      }
+
+      storageEditCtx = { namespace: ns, key, persistent: isPersistent, originalType: origType };
+      document.getElementById('storageEditInfo').textContent =
+        `${isPersistent ? 'Persistent' : 'Temporary'} → ${ns} → ${key} (type: ${origType})`;
+      document.getElementById('storageEditTextarea').value = textVal;
+      document.getElementById('storageEditError').style.display = 'none';
+      document.getElementById('storageEditDialog').classList.add('active');
+      setTimeout(() => document.getElementById('storageEditTextarea').focus(), 50);
+    }
+
+    function closeStorageEditDialog() {
+      document.getElementById('storageEditDialog').classList.remove('active');
+      storageEditCtx = null;
+    }
+
+    function saveStorageEdit() {
+      if (!storageEditCtx) return;
+      const text = document.getElementById('storageEditTextarea').value;
+      const { namespace: ns, key, persistent: isPersistent, originalType } = storageEditCtx;
+      let converted;
+
+      try {
+        if (originalType === 'boolean') {
+          if (text === 'true') converted = true;
+          else if (text === 'false') converted = false;
+          else throw new Error('Expected true or false');
+        } else if (originalType === 'number') {
+          const n = Number(text);
+          if (isNaN(n)) throw new Error('Expected a number');
+          converted = n;
+        } else if (originalType === 'object') {
+          converted = JSON.parse(text);
+          if (typeof converted !== 'object' || converted === null) throw new Error('Expected a JSON object or array');
+        } else {
+          converted = text;
+        }
+      } catch (e) {
+        // Show error with option to save as string
+        const errEl = document.getElementById('storageEditError');
+        errEl.innerHTML = `Cannot convert to ${originalType}: ${escapeHtml(e.message)}<br>
+          <button class="btn btn-accent" style="margin-top: 6px; font-size: 10px;" onclick="saveStorageEditAsString()">Save as string instead</button>
+          <button class="btn" style="margin-top: 6px; font-size: 10px;" onclick="document.getElementById('storageEditError').style.display='none'">Cancel</button>`;
+        errEl.style.display = 'block';
+        return;
+      }
+
+      send({ type: 'set_storage', namespace: ns, key, value: converted, persistent: isPersistent });
+      closeStorageEditDialog();
+      setTimeout(refreshStorage, 200);
+    }
+
+    function saveStorageEditAsString() {
+      if (!storageEditCtx) return;
+      const text = document.getElementById('storageEditTextarea').value;
+      send({ type: 'set_storage', namespace: storageEditCtx.namespace, key: storageEditCtx.key, value: text, persistent: storageEditCtx.persistent });
+      closeStorageEditDialog();
+      setTimeout(refreshStorage, 200);
+    }
+
+    // ─── Horizontal sidebar resize ──────────────────
+    function setupHorizontalSidebarResize() {
+      const handle = document.getElementById('sidebarHResize');
+      const sidebar = document.getElementById('sidebar');
+      let startX, startW;
+
+      handle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        startX = e.clientX;
+        startW = sidebar.offsetWidth;
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+      });
+
+      function onMove(e) {
+        const diff = e.clientX - startX;
+        const newW = Math.max(160, Math.min(500, startW + diff));
+        sidebar.style.width = newW + 'px';
+      }
+
+      function onUp() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
+    }
+
+    // ─── Session persistence ────────────────────────
+    function persistSession() {
+      try {
+        const tabs = [];
+        for (const [filePath, info] of openTabs) {
+          tabs.push({
+            path: filePath,
+            content: info.model ? info.model.getValue() : info.content,
+            modified: info.modified,
+            isActive: filePath === activeTab,
+          });
+        }
+        sessionStorage.setItem('tae_tabs', JSON.stringify(tabs));
+        sessionStorage.setItem('tae_changed', JSON.stringify(Array.from(changedSinceReload)));
+      } catch {}
+    }
+
+    function restoreSession() {
+      try {
+        const raw = sessionStorage.getItem('tae_tabs');
+        if (!raw) return;
+        const tabs = JSON.parse(raw);
+        if (!Array.isArray(tabs) || tabs.length === 0) return;
+
+        // Store pending restore; actual restore happens after Monaco is ready
+        window._pendingRestore = tabs;
+
+        const changed = sessionStorage.getItem('tae_changed');
+        if (changed) {
+          const arr = JSON.parse(changed);
+          for (const p of arr) changedSinceReload.add(p);
+        }
+
+        sessionStorage.removeItem('tae_tabs');
+        sessionStorage.removeItem('tae_changed');
+      } catch {}
+    }
+
+    function applySessionRestore() {
+      const tabs = window._pendingRestore;
+      if (!tabs) return;
+      delete window._pendingRestore;
+
+      let activeToRestore = null;
+      for (const t of tabs) {
+        if (!openTabs.has(t.path)) {
+          openFile(t.path, t.content);
+          if (t.modified) {
+            // Content was modified but not saved - mark modified
+            const tabInfo = openTabs.get(t.path);
+            if (tabInfo) {
+              tabInfo.modified = true;
+            }
+          }
+        }
+        if (t.isActive) activeToRestore = t.path;
+      }
+      if (activeToRestore && openTabs.has(activeToRestore)) {
+        switchToTab(activeToRestore);
+      }
+      renderTabs();
+      updateReloadBadge();
     }
   </script>
 </body>
