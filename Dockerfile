@@ -1,8 +1,11 @@
 ARG BUILD_FROM=ghcr.io/hassio-addons/base:16.3.2
 FROM ${BUILD_FROM}
 
-# Install Node.js and build tools for native modules (better-sqlite3)
-RUN apk add --no-cache nodejs npm python3 make g++
+# Remove exact musl pin from world file (base image pins musl=1.2.5-r0 but repo now has r3),
+# then upgrade all base packages so musl can be updated, then install build deps
+RUN sed -i 's/^musl=.*/musl/' /etc/apk/world \
+    && apk upgrade --no-cache \
+    && apk add --no-cache nodejs npm python3 make g++
 
 # Set up working directory
 WORKDIR /app
