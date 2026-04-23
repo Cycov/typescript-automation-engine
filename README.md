@@ -8,6 +8,8 @@ Write and run Home Assistant automations in TypeScript with a managed runtime, b
 - **Worker thread isolation** - Automations run in a dedicated worker thread for clean reloads and fault isolation
 - **Built-in editor** - Monaco-based editor with TypeScript IntelliSense, syntax highlighting, and multi-tab support
 - **AI Friendly-ness** - Provides ai context files and since the language is typescipt, common AI assistants can make automations with ease
+- **Built-in AI integration** - Inline code completions and a chat sidebar powered by GitHub Models, OpenAI, or Anthropic
+- **Code snippets** - Define reusable code templates in `.snippets` files with tab-stop placeholders
 - **File management** - Create, rename, delete, and drag-drop files/folders directly in the UI
 - **Lifecycle management** - Predictable automation lifecycle (`onStart` → `onStop` → `onReload` → `onUnload`)
 - **HA integration** - Full WebSocket connection to Home Assistant for calling services, subscribing to events, and monitoring state changes
@@ -556,6 +558,98 @@ Click the **Work with AI** button in the toolbar to open a dialog for downloadin
 |------------|--------------|--------------------------------------------------|
 | `log_level`| `info`       | Minimum log level for **console output**: `debug`, `info`, `warn`, `error`. Note: all log levels are always visible in the UI regardless of this setting - the UI has its own level filter. |
 | `sync_path`| `/share/tae` | External directory for import/export sync        |
+| `ai_provider`| `none`     | AI provider: `none`, `github`, `openai`, or `anthropic` |
+| `ai_api_key`| `""`        | API key or Personal Access Token for the AI provider |
+| `ai_model`| `""`         | Model name for chat (e.g., `gpt-4o`, `claude-sonnet-4-20250514`) |
+| `ai_completion_model`| `""` | Model name for inline completions (optional, falls back to `ai_model`) |
+
+## AI Integration
+
+TAE includes built-in AI assistance with **inline code completions** as you type and a **chat sidebar** for asking questions about your automations, Home Assistant APIs, and more.
+
+### Supported Providers
+
+| Provider | `ai_provider` | API Endpoint | Notes |
+|----------|--------------|--------------|-------|
+| GitHub Models | `github` | `models.inference.ai.azure.com` | Free with GitHub Copilot subscription |
+| OpenAI | `openai` | `api.openai.com/v1` | Requires OpenAI API key |
+| Anthropic | `anthropic` | `api.anthropic.com/v1` | Requires Anthropic API key |
+
+### Setting Up GitHub Models (recommended)
+
+GitHub Models is free if you have a GitHub Copilot subscription.
+
+1. Go to [github.com/settings/tokens](https://github.com/settings/tokens?type=beta) and click **Generate new token** (Fine-grained)
+2. Give it a name (e.g., "TAE AI")
+3. Under **Permissions**, expand **Account permissions** and set **GitHub Copilot** → **Read-only** and **Models** → **Read-only**
+4. Click **Generate token** and copy it
+5. In Home Assistant, go to **Settings → Add-ons → TypeScript Automation Engine → Configuration**
+6. Set:
+   - `ai_provider`: `github`
+   - `ai_api_key`: your token
+   - `ai_model`: e.g., `gpt-4o`, `gpt-4.1`, `claude-sonnet-4-20250514`
+   - `ai_completion_model`: (optional) a fast model for completions, e.g., `gpt-4o-mini`
+7. Restart the addon
+
+> **Important:** The token **must** have the `models` permission. Without it you will get:
+> `AI API 401: The 'models' permission is required to access this endpoint`
+
+### Available Models (GitHub Models)
+
+Check [GitHub Models marketplace](https://github.com/marketplace/models) for the latest list. Some commonly used models:
+
+| Model | Best For |
+|-------|----------|
+| `gpt-4o` | General chat and completions |
+| `gpt-4o-mini` | Fast inline completions |
+| `gpt-4.1` | Chat with improved reasoning |
+| `claude-sonnet-4-20250514` | Chat (Anthropic via GitHub) |
+
+### Using the AI Chat
+
+Click the **🤖 AI** button in the header (or press `Ctrl+Shift+I`) to open the chat sidebar. The AI automatically receives context about:
+- Your currently open file
+- Your Home Assistant entities
+- The TAE API reference (from SKILL.md)
+
+### Inline Completions
+
+When AI is configured, you'll get automatic code suggestions as you type (after a short debounce). Press `Tab` to accept a suggestion or keep typing to dismiss it.
+
+## Code Snippets
+
+TAE supports reusable code snippets loaded from `.snippets` files in your automations directory.
+
+### Creating Snippets
+
+Create a file ending in `.snippets` (e.g., `my.snippets`) in your automations folder. Each snippet is a JSON object separated by blank lines:
+
+```json
+{
+  "name": "State change handler",
+  "description": "Subscribe to an entity state change",
+  "activation": "onstate",
+  "code": "this.subscribeToStateChangeEvent('${1:entity_id}', async (data) => {\n  if (data.new_state?.state === '${2:on}') {\n    ${3:// action}\n  }\n});"
+}
+
+{
+  "name": "Call service",
+  "description": "Call a Home Assistant service",
+  "activation": "callsvc",
+  "code": "await this.callService('${1:domain}', '${2:service}', {\n  entity_id: '${3:entity_id}',\n});"
+}
+```
+
+### Snippet Format
+
+| Field | Description |
+|-------|-------------|
+| `name` | Display name shown in the autocomplete list |
+| `description` | Short description shown alongside the name |
+| `activation` | The trigger text — type this and select the snippet from autocomplete |
+| `code` | The code template. Use `${1}`, `${2}`, etc. for tab stops that the user fills in. `${1:default}` provides a default value. |
+
+Snippet files are loaded automatically when TAE starts. After editing a `.snippets` file, reload the page to pick up changes.
 
 ## Architecture
 
@@ -611,6 +705,23 @@ Click the **Work with AI** button in the toolbar to open a dialog for downloadin
 | Terminal command returns string error | Make sure to quote string arguments: `callService('light', 'turn_on', {entity_id: 'light.x'})` |
 
 ## Changelog
+
+### 1.7.0
+
+- **Feature**: AI integration — inline code completions and chat sidebar (GitHub Models, OpenAI, Anthropic)
+- **Feature**: AI settings dialog for configuring provider, API key, and models from the UI
+- **Feature**: Code snippets — define reusable templates in `.snippets` files with tab-stop placeholders
+- **Feature**: Storage entries now open on single click (name or value)
+- **Feature**: Tab drag-and-drop reorder in the editor
+- **Feature**: `Ctrl+Shift+S` saves all open files
+- **Feature**: Help panel (`Ctrl+Shift+H`) with keyboard shortcuts reference
+- **Fix**: SKILL.md no longer auto-downloads on page load (only when the download button is clicked)
+- **Fix**: Event subscription duplication on reload
+- **Fix**: Session persistence for sidebar state and scroll positions
+- **Fix**: Horizontal sidebar resize handle
+- **UI**: Clear Logs button moved to output panel filter bar
+- **Docs**: Added AI Integration setup guide with GitHub Models PAT instructions
+- **Docs**: Added Code Snippets documentation
 
 ### 1.6.0
 

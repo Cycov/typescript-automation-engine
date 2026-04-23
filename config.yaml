@@ -18,9 +18,17 @@ panel_title: "TAE"
 options:
   log_level: "info"
   sync_path: "/share/tae"
+  ai_provider: "none"
+  ai_api_key: ""
+  ai_model: ""
+  ai_completion_model: ""
 schema:
   log_level: list(debug|info|warn|error)
   sync_path: str
+  ai_provider: list(none|github|openai|anthropic)
+  ai_api_key: str
+  ai_model: str
+  ai_completion_model: str
 startup: application
 init: false
 map:

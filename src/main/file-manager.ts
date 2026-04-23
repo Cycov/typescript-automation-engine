@@ -49,7 +49,7 @@ export class FileManager {
           isDirectory: true,
           children: this.readDirRecursive(path.join(absPath, item.name), itemRelPath),
         });
-      } else if (item.name.endsWith(".ts") || item.name.endsWith(".json")) {
+      } else if (item.name.endsWith(".ts") || item.name.endsWith(".json") || item.name.endsWith(".snippets")) {
         entries.push({
           name: item.name,
           path: itemRelPath,
@@ -154,6 +154,48 @@ export class FileManager {
       fs.mkdirSync(dir, { recursive: true });
     }
     fs.renameSync(oldSafe, newSafe);
+  }
+
+  /**
+   * Read all .snippets files and parse their contents.
+   */
+  readAllSnippets(): Array<{ name: string; description: string; activation: string; code: string }> {
+    const results: Array<{ name: string; description: string; activation: string; code: string }> = [];
+    this.collectSnippetFiles(this.automationsPath, results);
+    return results;
+  }
+
+  private collectSnippetFiles(
+    absDir: string,
+    out: Array<{ name: string; description: string; activation: string; code: string }>
+  ): void {
+    if (!fs.existsSync(absDir)) return;
+    const items = fs.readdirSync(absDir, { withFileTypes: true });
+    for (const item of items) {
+      if (item.name === "node_modules" || item.name.startsWith(".")) continue;
+      if (item.isDirectory()) {
+        this.collectSnippetFiles(path.join(absDir, item.name), out);
+      } else if (item.name.endsWith(".snippets")) {
+        try {
+          const raw = fs.readFileSync(path.join(absDir, item.name), "utf-8");
+          // Split on blank-line-separated JSON objects
+          const blocks = raw.split(/\n\s*\n/).filter((b) => b.trim());
+          for (const block of blocks) {
+            try {
+              const obj = JSON.parse(block.trim());
+              if (obj.name && obj.activation && obj.code) {
+                out.push({
+                  name: obj.name,
+                  description: obj.description || "",
+                  activation: obj.activation,
+                  code: obj.code,
+                });
+              }
+            } catch { /* skip malformed blocks */ }
+          }
+        } catch { /* skip unreadable files */ }
+      }
+    }
   }
 
   /**

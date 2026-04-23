@@ -20,6 +20,7 @@ import { Storage } from "./storage";
 import { Logger } from "./logging";
 import { WorkerManager } from "./worker-manager";
 import { FileManager } from "./file-manager";
+import { AIProvider, AIConfig } from "./ai-provider";
 
 // ─── Configuration ──────────────────────────────────────────
 
@@ -30,12 +31,19 @@ const PORT = parseInt(process.env.INGRESS_PORT || "3200", 10);
 const optionsPath = "/data/options.json";
 let logLevel = "info";
 let syncPath = "/share/tae";
+let aiConfig: AIConfig = { provider: "none", apiKey: "", model: "", completionModel: "" };
 
 try {
   if (fs.existsSync(optionsPath)) {
     const options = JSON.parse(fs.readFileSync(optionsPath, "utf-8"));
     logLevel = options.log_level || "info";
     syncPath = options.sync_path || "/share/tae";
+    aiConfig = {
+      provider: options.ai_provider || "none",
+      apiKey: options.ai_api_key || "",
+      model: options.ai_model || "",
+      completionModel: options.ai_completion_model || "",
+    };
   }
 } catch {}
 
@@ -53,6 +61,7 @@ if (!fs.existsSync(AUTOMATIONS_PATH)) {
 const logger = new Logger(logLevel);
 const storage = new Storage(DB_PATH);
 const fileManager = new FileManager(AUTOMATIONS_PATH, syncPath);
+const aiProvider = new AIProvider(aiConfig);
 
 const haClient = new HAClient({
   supervisorToken: SUPERVISOR_TOKEN,
@@ -566,6 +575,89 @@ wss.on("connection", (ws) => {
             ws.send(JSON.stringify({ type: "error", message: `Skill file error: ${e.message}` }));
           }
           break;
+
+        case "get_snippets":
+          try {
+            const snippets = fileManager.readAllSnippets();
+            ws.send(JSON.stringify({ type: "snippets", data: snippets }));
+          } catch (e: any) {
+            ws.send(JSON.stringify({ type: "error", message: `Snippets error: ${e.message}` }));
+          }
+          break;
+
+        case "ai_get_config":
+          ws.send(JSON.stringify({ type: "ai_config", data: aiProvider.getInfo() }));
+          break;
+
+        case "ai_set_config":
+          try {
+            const { provider, apiKey, model, completionModel } = msg;
+            aiProvider.updateConfig({
+              ...(provider !== undefined && { provider }),
+              ...(apiKey !== undefined && { apiKey }),
+              ...(model !== undefined && { model }),
+              ...(completionModel !== undefined && { completionModel }),
+            });
+            ws.send(JSON.stringify({ type: "ai_config", data: aiProvider.getInfo() }));
+          } catch (e: any) {
+            ws.send(JSON.stringify({ type: "error", message: `AI config error: ${e.message}` }));
+          }
+          break;
+
+        case "ai_complete":
+          try {
+            if (!aiProvider.isConfigured()) {
+              ws.send(JSON.stringify({ type: "ai_completion", id: msg.id, text: "" }));
+              break;
+            }
+            const completion = await aiProvider.complete({
+              prefix: msg.prefix || "",
+              suffix: msg.suffix || "",
+              filePath: msg.filePath || "",
+              otherFiles: msg.otherFiles,
+              entityContext: msg.entityContext,
+            });
+            ws.send(JSON.stringify({ type: "ai_completion", id: msg.id, text: completion }));
+          } catch (e: any) {
+            ws.send(JSON.stringify({ type: "ai_completion", id: msg.id, text: "", error: e.message }));
+          }
+          break;
+
+        case "ai_chat":
+          try {
+            if (!aiProvider.isConfigured()) {
+              ws.send(JSON.stringify({ type: "ai_chat_error", error: "AI not configured. Set provider, API key, and model in addon config or settings." }));
+              break;
+            }
+            const chatId = msg.id || Date.now();
+            await aiProvider.chat(
+              { messages: msg.messages || [], systemContext: msg.systemContext },
+              {
+                onChunk: (text: string) => {
+                  if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: "ai_chat_chunk", id: chatId, text }));
+                  }
+                },
+                onDone: () => {
+                  if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: "ai_chat_done", id: chatId }));
+                  }
+                },
+                onError: (error: string) => {
+                  if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: "ai_chat_error", id: chatId, error }));
+                  }
+                },
+              }
+            );
+          } catch (e: any) {
+            ws.send(JSON.stringify({ type: "ai_chat_error", error: e.message }));
+          }
+          break;
+
+        case "ai_cancel":
+          aiProvider.cancel();
+          break;
       }
     } catch (e: any) {
       logger.log("error", "ws", `Message handler error: ${e.message}`, e);
@@ -575,6 +667,7 @@ wss.on("connection", (ws) => {
   ws.on("close", () => {
     unsubLog();
     unsubAutomations();
+    aiProvider.cancel();
     logger.log("debug", "ws", "UI client disconnected");
   });
 });

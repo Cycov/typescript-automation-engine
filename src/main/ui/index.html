@@ -700,6 +700,180 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+    /* ─── AI Chat Sidebar ───────────────────────────── */
+    .ai-sidebar {
+      width: 0;
+      max-width: 500px;
+      background: var(--bg-secondary);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      overflow: hidden;
+      transition: width 0.2s ease;
+    }
+    .ai-sidebar.open { width: 380px; }
+    .ai-sidebar-header {
+      display: flex;
+      align-items: center;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .ai-sidebar-header h2 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent);
+      flex: 1;
+    }
+    .ai-sidebar-header .btn { padding: 2px 8px; font-size: 10px; }
+    .ai-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 12px;
+    }
+    .ai-msg {
+      margin-bottom: 12px;
+      line-height: 1.55;
+      font-size: 12px;
+    }
+    .ai-msg-user {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .ai-msg-assistant {
+      padding: 4px 0;
+    }
+    .ai-msg-assistant pre {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      overflow-x: auto;
+      font-size: 12px;
+      margin: 6px 0;
+      position: relative;
+    }
+    .ai-msg-assistant code {
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 12px;
+    }
+    .ai-msg-assistant p { margin: 4px 0; }
+    .ai-msg-assistant p code {
+      background: var(--bg-tertiary);
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-size: 11px;
+    }
+    .ai-msg-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-dim);
+      margin-bottom: 3px;
+    }
+    .ai-msg-error {
+      color: var(--red);
+      font-size: 11px;
+      padding: 6px 8px;
+      background: rgba(248,81,73,0.1);
+      border-radius: 4px;
+    }
+    .ai-msg-thinking {
+      color: var(--text-dim);
+      font-style: italic;
+      font-size: 11px;
+    }
+    .ai-msg-thinking::after {
+      content: '';
+      animation: dots 1.5s infinite;
+    }
+    @keyframes dots {
+      0%, 20% { content: '.'; }
+      40% { content: '..'; }
+      60%, 100% { content: '...'; }
+    }
+    .ai-copy-btn {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      background: var(--bg-input);
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      padding: 1px 6px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 10px;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .ai-msg-assistant pre:hover .ai-copy-btn { opacity: 1; }
+    .ai-copy-btn:hover { color: var(--accent); border-color: var(--accent); }
+    .ai-input-area {
+      padding: 8px 12px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .ai-input-row {
+      display: flex;
+      gap: 6px;
+      align-items: flex-end;
+    }
+    .ai-input {
+      flex: 1;
+      background: var(--bg-input);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 12px;
+      resize: none;
+      outline: none;
+      min-height: 36px;
+      max-height: 120px;
+      line-height: 1.4;
+    }
+    .ai-input:focus { border-color: var(--accent); }
+    .ai-send-btn {
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 12px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      flex-shrink: 0;
+      height: 36px;
+    }
+    .ai-send-btn:hover { opacity: 0.9; }
+    .ai-send-btn:disabled { opacity: 0.4; cursor: default; }
+    .ai-context-label {
+      font-size: 10px;
+      color: var(--text-dim);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .ai-status-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .ai-status-dot.configured { background: var(--green); }
+    .ai-status-dot.unconfigured { background: var(--red); }
   </style>
 </head>
 <body>
@@ -717,6 +891,7 @@
       <button class="btn" onclick="showImportDialog()">Import</button>
       <button class="btn" onclick="showAiDialog()" title="Export entities/devices and SKILL.md for AI editing">Work with AI</button>
       <button class="btn" onclick="showHelpPanel()" title="Keyboard shortcuts & help">Help</button>
+      <button class="btn btn-accent" onclick="toggleAiChat()" id="aiChatBtn" title="AI Chat (Ctrl+Shift+I)">🤖 AI</button>
       <button class="btn btn-reload" onclick="reload()" id="reloadBtn">⟳ Reload</button>
     </div>
   </header>
@@ -816,6 +991,30 @@
                    onkeydown="handleTerminalKey(event)" oninput="handleTerminalInput(event)" />
             <div class="autocomplete-popup" id="autocompletePopup"></div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Chat Sidebar -->
+    <div class="ai-sidebar" id="aiSidebar">
+      <div class="ai-sidebar-header">
+        <h2>🤖 AI Chat</h2>
+        <span class="ai-context-label"><span class="ai-status-dot" id="aiStatusDot"></span> <span id="aiStatusLabel">Not configured</span></span>
+        <button class="btn" onclick="showAiSettingsDialog()" title="AI Settings">⚙</button>
+        <button class="btn" onclick="clearAiChat()" title="New chat">+</button>
+        <button class="btn" onclick="toggleAiChat()" title="Close">✕</button>
+      </div>
+      <div class="ai-messages" id="aiMessages">
+        <div class="ai-msg ai-msg-assistant" style="color: var(--text-dim); font-size: 11px;">
+          Ask questions about your automations, get help writing TAE code, or describe what you want to automate.
+        </div>
+      </div>
+      <div class="ai-input-area">
+        <div class="ai-context-label" id="aiContextInfo">Context: current file</div>
+        <div class="ai-input-row">
+          <textarea class="ai-input" id="aiInput" placeholder="Ask AI..." rows="1"
+                    onkeydown="handleAiInputKey(event)" oninput="autoResizeAiInput()"></textarea>
+          <button class="ai-send-btn" id="aiSendBtn" onclick="sendAiChat()">Send</button>
         </div>
       </div>
     </div>
@@ -958,6 +1157,7 @@ supported_features: 40"></textarea>
         <table style="width: 100%; border-collapse: collapse;">
           <tr><td style="color: var(--accent); padding: 2px 12px 2px 0;">Ctrl+S</td><td>Save current file</td></tr>
           <tr><td style="color: var(--accent); padding: 2px 12px 2px 0;">Ctrl+Shift+S</td><td>Save all open files</td></tr>
+          <tr><td style="color: var(--accent); padding: 2px 12px 2px 0;">Ctrl+Shift+I</td><td>Toggle AI chat sidebar</td></tr>
           <tr><td style="color: var(--accent); padding: 2px 12px 2px 0;">Delete</td><td>Delete selected file in sidebar</td></tr>
           <tr><td style="color: var(--accent); padding: 2px 12px 2px 0;">Ctrl+Click</td><td>Go to definition</td></tr>
           <tr><td style="color: var(--accent); padding: 2px 12px 2px 0;">Tab</td><td>Open / accept autocomplete (terminal)</td></tr>
@@ -995,6 +1195,40 @@ supported_features: 40"></textarea>
     </div>
   </div>
 
+  <!-- AI Settings dialog -->
+  <div class="dialog-overlay" id="aiSettingsDialog">
+    <div class="dialog" style="min-width: 480px;">
+      <h3>🤖 AI Settings</h3>
+      <p>Configure the AI provider for inline completions and chat. Settings are saved in the addon config, but you can override them here for this session.</p>
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;">Provider</label>
+        <select id="aiSettProvider" style="width: 100%; background: var(--bg-input); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 4px; font-family: inherit; font-size: 12px;">
+          <option value="none">None (disabled)</option>
+          <option value="github">GitHub Models</option>
+          <option value="openai">OpenAI</option>
+          <option value="anthropic">Anthropic</option>
+        </select>
+      </div>
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;">API Key</label>
+        <input type="password" id="aiSettApiKey" style="width: 100%; background: var(--bg-input); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 4px; font-family: inherit; font-size: 12px; outline: none;" placeholder="GitHub PAT, OpenAI key, or Anthropic key" />
+      </div>
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;">Chat Model</label>
+        <input type="text" id="aiSettModel" placeholder="e.g. claude-sonnet-4-20250514, gpt-4o" />
+      </div>
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;">Completion Model <span style="font-size: 10px;">(optional — uses chat model if empty)</span></label>
+        <input type="text" id="aiSettCompletionModel" placeholder="e.g. gpt-4o-mini (faster for inline)" />
+      </div>
+      <div id="aiSettStatus" style="font-size: 11px; margin-bottom: 12px;"></div>
+      <div class="dialog-actions">
+        <button class="btn" onclick="closeAiSettingsDialog()">Cancel</button>
+        <button class="btn btn-accent" onclick="saveAiSettings()">Save</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Monaco Editor CDN -->
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.47.0/min/vs/loader.js"></script>
 
@@ -1017,6 +1251,15 @@ supported_features: 40"></textarea>
     let pendingEntitiesDownload = false;
     let autoScrollLocked = true;
     let storageRefreshTimer = null;
+    let aiChatOpen = false;
+    let aiChatMessages = []; // { role: 'user'|'assistant', content: string }
+    let aiStreaming = false;
+    let aiStreamingContent = '';
+    let aiConfig = { provider: 'none', model: '', completionModel: '', configured: false };
+    let aiCompletionId = 0;
+    let aiCompletionResolve = null;
+    let aiSkillMdCache = null;
+    let loadedSnippets = []; // { name, description, activation, code }
 
     // ─── WebSocket ──────────────────────────────────
     function connectWS() {
@@ -1033,6 +1276,7 @@ supported_features: 40"></textarea>
         ws.send(JSON.stringify({ type: 'get_files' }));
         ws.send(JSON.stringify({ type: 'get_all_entities' }));
         ws.send(JSON.stringify({ type: 'get_storage' }));
+        ws.send(JSON.stringify({ type: 'ai_get_config' }));
         startStoragePolling();
       };
 
@@ -1134,13 +1378,43 @@ supported_features: 40"></textarea>
           }
           break;
         case 'skill_file':
-          handleSkillDownload(msg.data || '');
+          aiSkillMdCache = msg.data || null;
+          if (pendingSkillDownload) {
+            pendingSkillDownload = false;
+            handleSkillDownload(msg.data || '');
+          }
+          break;
+        case 'snippets':
+          loadedSnippets = msg.data || [];
+          if (loadedSnippets.length > 0) {
+            addLocalLog('info', 'ui', `Loaded ${loadedSnippets.length} snippet(s)`);
+          }
           break;
         case 'exec_result':
           handleExecResult(msg);
           break;
         case 'storage_data':
           renderStorageViewer(msg.persistent, msg.temp);
+          break;
+        case 'ai_config':
+          aiConfig = msg.data || aiConfig;
+          updateAiStatus();
+          break;
+        case 'ai_completion':
+          if (aiCompletionResolve && msg.id === aiCompletionId) {
+            aiCompletionResolve(msg.text || '');
+            aiCompletionResolve = null;
+          }
+          break;
+        case 'ai_chat_chunk':
+          aiStreamingContent += msg.text || '';
+          updateAiStreamingMessage();
+          break;
+        case 'ai_chat_done':
+          finalizeAiStreaming();
+          break;
+        case 'ai_chat_error':
+          handleAiChatError(msg.error || 'Unknown error');
           break;
         case 'error':
           addLocalLog('error', 'ui', msg.message);
@@ -1478,6 +1752,13 @@ supported_features: 40"></textarea>
       if (e.key === 'Escape') {
         if (document.getElementById('helpDialog').classList.contains('active')) { closeHelpPanel(); return; }
         if (document.getElementById('storageEditDialog').classList.contains('active')) { closeStorageEditDialog(); return; }
+        if (document.getElementById('aiSettingsDialog').classList.contains('active')) { closeAiSettingsDialog(); return; }
+      }
+      // Ctrl+Shift+I: toggle AI chat
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'I') {
+        e.preventDefault();
+        toggleAiChat();
+        return;
       }
       // Ctrl+Shift+S: save all
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'S') {
@@ -1818,6 +2099,18 @@ supported_features: 40"></textarea>
         }
 
         monacoReady = true;
+
+        // Register AI inline completions
+        registerAiInlineCompletions();
+
+        // Register snippet completions
+        registerSnippetCompletions();
+
+        // Fetch SKILL.md for AI context
+        send({ type: 'get_skill_file' });
+
+        // Fetch snippets
+        send({ type: 'get_snippets' });
 
         // Restore session tabs if any were persisted
         applySessionRestore();
@@ -2186,10 +2479,13 @@ supported_features: 40"></textarea>
       addLocalLog('info', 'ui', `Downloaded ${entities.length} entities`);
     }
 
+    let pendingSkillDownload = false;
+
     function downloadSkillFile() {
       const btn = document.getElementById('aiSkillBtn');
       btn.textContent = 'Loading...';
       btn.disabled = true;
+      pendingSkillDownload = true;
       send({ type: 'get_skill_file' });
     }
 
@@ -3182,9 +3478,9 @@ supported_features: 40"></textarea>
           valStr = String(val);
         }
         const pFlag = isPersistent ? 'true' : 'false';
-        html += `<div class="storage-entry" title="${escapeHtml(key)}: ${escapeHtml(valStr)}">`;
+        html += `<div class="storage-entry" title="${escapeHtml(key)}: ${escapeHtml(valStr)}" onclick="openStorageEdit('${escapeAttr(ns)}', '${escapeAttr(key)}', ${pFlag})" style="cursor:pointer">`;
         html += `<span class="storage-key">${escapeHtml(key)}:</span> `;
-        html += `<span class="storage-val" ondblclick="openStorageEdit('${escapeAttr(ns)}', '${escapeAttr(key)}', ${pFlag})">${escapeHtml(valStr)}</span>`;
+        html += `<span class="storage-val">${escapeHtml(valStr)}</span>`;
         html += `</div>`;
       }
       html += `</div></div>`;
@@ -3377,6 +3673,395 @@ supported_features: 40"></textarea>
       }
       renderTabs();
       updateReloadBadge();
+    }
+
+    // ─── AI Chat functions ──────────────────────────
+    function toggleAiChat() {
+      aiChatOpen = !aiChatOpen;
+      document.getElementById('aiSidebar').classList.toggle('open', aiChatOpen);
+      document.getElementById('aiChatBtn').classList.toggle('btn-accent', aiChatOpen);
+      if (aiChatOpen) {
+        updateAiContextInfo();
+        setTimeout(() => document.getElementById('aiInput').focus(), 250);
+      }
+    }
+
+    function updateAiStatus() {
+      const dot = document.getElementById('aiStatusDot');
+      const label = document.getElementById('aiStatusLabel');
+      if (aiConfig.configured) {
+        dot.className = 'ai-status-dot configured';
+        label.textContent = aiConfig.model || aiConfig.provider;
+      } else {
+        dot.className = 'ai-status-dot unconfigured';
+        label.textContent = 'Not configured';
+      }
+    }
+
+    function updateAiContextInfo() {
+      const el = document.getElementById('aiContextInfo');
+      if (activeTab) {
+        const name = activeTab.split('/').pop();
+        el.textContent = 'Context: ' + name;
+      } else {
+        el.textContent = 'Context: no file open';
+      }
+    }
+
+    function clearAiChat() {
+      aiChatMessages = [];
+      aiStreaming = false;
+      aiStreamingContent = '';
+      const container = document.getElementById('aiMessages');
+      container.innerHTML = '<div class="ai-msg ai-msg-assistant" style="color: var(--text-dim); font-size: 11px;">Ask questions about your automations, get help writing TAE code, or describe what you want to automate.</div>';
+    }
+
+    function handleAiInputKey(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendAiChat();
+      }
+    }
+
+    function autoResizeAiInput() {
+      const el = document.getElementById('aiInput');
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+    }
+
+    function sendAiChat() {
+      if (aiStreaming) return;
+      const input = document.getElementById('aiInput');
+      const text = input.value.trim();
+      if (!text) return;
+
+      if (!aiConfig.configured) {
+        showAiSettingsDialog();
+        return;
+      }
+
+      // Add user message
+      aiChatMessages.push({ role: 'user', content: text });
+      appendAiMessage('user', text);
+      input.value = '';
+      autoResizeAiInput();
+
+      // Build system context
+      let systemContext = buildAiSystemContext();
+
+      // Start streaming
+      aiStreaming = true;
+      aiStreamingContent = '';
+      document.getElementById('aiSendBtn').disabled = true;
+      document.getElementById('aiSendBtn').textContent = 'Stop';
+      document.getElementById('aiSendBtn').onclick = () => { send({ type: 'ai_cancel' }); finalizeAiStreaming(); };
+
+      // Show thinking indicator
+      appendAiThinking();
+
+      send({
+        type: 'ai_chat',
+        id: Date.now(),
+        messages: aiChatMessages.map(m => ({ role: m.role, content: m.content })),
+        systemContext,
+      });
+    }
+
+    function buildAiSystemContext() {
+      let context = '';
+
+      // Current file
+      if (activeTab && openTabs.has(activeTab)) {
+        const tab = openTabs.get(activeTab);
+        const content = tab.model ? tab.model.getValue() : tab.content;
+        context += `Currently open file (${activeTab}):\n\`\`\`typescript\n${content.slice(0, 8000)}\n\`\`\`\n\n`;
+      }
+
+      // Entity summary
+      if (cachedEntityIds && cachedEntityIds.length > 0) {
+        const summary = cachedEntityIds.slice(0, 100).map(e => `${e.id} (${e.name})`).join(', ');
+        context += `Available HA entities (first 100): ${summary}\n\n`;
+      }
+
+      // SKILL.md cache
+      if (aiSkillMdCache) {
+        context += `TAE Reference:\n${aiSkillMdCache.slice(0, 6000)}\n`;
+      }
+
+      return context;
+    }
+
+    function appendAiMessage(role, content) {
+      const container = document.getElementById('aiMessages');
+      const div = document.createElement('div');
+      div.className = 'ai-msg';
+
+      if (role === 'user') {
+        div.innerHTML = '<div class="ai-msg-label">You</div><div class="ai-msg-user">' + escapeHtml(content) + '</div>';
+      } else {
+        div.innerHTML = '<div class="ai-msg-label">AI</div><div class="ai-msg-assistant">' + renderAiMarkdown(content) + '</div>';
+      }
+
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function appendAiThinking() {
+      const container = document.getElementById('aiMessages');
+      const div = document.createElement('div');
+      div.className = 'ai-msg';
+      div.id = 'aiThinking';
+      div.innerHTML = '<div class="ai-msg-label">AI</div><div class="ai-msg-thinking">Thinking</div>';
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function updateAiStreamingMessage() {
+      // Replace thinking indicator with streaming content
+      const thinking = document.getElementById('aiThinking');
+      if (thinking) {
+        thinking.innerHTML = '<div class="ai-msg-label">AI</div><div class="ai-msg-assistant">' + renderAiMarkdown(aiStreamingContent) + '</div>';
+        const container = document.getElementById('aiMessages');
+        container.scrollTop = container.scrollHeight;
+      }
+    }
+
+    function finalizeAiStreaming() {
+      if (!aiStreaming) return;
+      aiStreaming = false;
+
+      // Remove thinking element and add final message
+      const thinking = document.getElementById('aiThinking');
+      if (thinking) thinking.remove();
+
+      if (aiStreamingContent.trim()) {
+        aiChatMessages.push({ role: 'assistant', content: aiStreamingContent });
+        appendAiMessage('assistant', aiStreamingContent);
+      }
+
+      aiStreamingContent = '';
+      document.getElementById('aiSendBtn').disabled = false;
+      document.getElementById('aiSendBtn').textContent = 'Send';
+      document.getElementById('aiSendBtn').onclick = sendAiChat;
+    }
+
+    function handleAiChatError(error) {
+      aiStreaming = false;
+      const thinking = document.getElementById('aiThinking');
+      if (thinking) thinking.remove();
+
+      const container = document.getElementById('aiMessages');
+      const div = document.createElement('div');
+      div.className = 'ai-msg';
+      div.innerHTML = '<div class="ai-msg-error">' + escapeHtml(error) + '</div>';
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+
+      document.getElementById('aiSendBtn').disabled = false;
+      document.getElementById('aiSendBtn').textContent = 'Send';
+      document.getElementById('aiSendBtn').onclick = sendAiChat;
+    }
+
+    function renderAiMarkdown(text) {
+      // Simple markdown renderer: code blocks, inline code, bold, italic, lists
+      let html = escapeHtml(text);
+
+      // Code blocks: ```lang\ncode\n```
+      html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+        const id = 'cb' + Math.random().toString(36).slice(2, 8);
+        return '<pre><code class="lang-' + (lang || 'text') + '">' + code.trim() + '</code><button class="ai-copy-btn" onclick="copyAiCodeBlock(\'' + id + '\')">Copy</button></pre>';
+      });
+
+      // Inline code: `code`
+      html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+      // Bold: **text**
+      html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+      // Italic: *text*
+      html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+
+      // Line breaks to paragraphs
+      html = html.split('\n\n').map(p => '<p>' + p + '</p>').join('');
+      html = html.replace(/<p><\/p>/g, '');
+
+      // Newlines within paragraphs
+      html = html.replace(/\n/g, '<br>');
+
+      return html;
+    }
+
+    function copyAiCodeBlock(id) {
+      // Find the pre element near the button click
+      event.preventDefault();
+      const btn = event.target;
+      const pre = btn.closest('pre');
+      if (!pre) return;
+      const code = pre.querySelector('code');
+      if (!code) return;
+      navigator.clipboard.writeText(code.textContent).then(() => {
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+      });
+    }
+
+    // ─── AI Settings dialog ─────────────────────────
+    function showAiSettingsDialog() {
+      // Populate from current config
+      document.getElementById('aiSettProvider').value = aiConfig.provider || 'none';
+      document.getElementById('aiSettApiKey').value = '';
+      document.getElementById('aiSettModel').value = aiConfig.model || '';
+      document.getElementById('aiSettCompletionModel').value = aiConfig.completionModel || '';
+      document.getElementById('aiSettStatus').textContent = aiConfig.configured ? '✓ Currently configured' : '✗ Not configured';
+      document.getElementById('aiSettStatus').style.color = aiConfig.configured ? 'var(--green)' : 'var(--text-dim)';
+      document.getElementById('aiSettingsDialog').classList.add('active');
+    }
+
+    function closeAiSettingsDialog() {
+      document.getElementById('aiSettingsDialog').classList.remove('active');
+    }
+
+    function saveAiSettings() {
+      const provider = document.getElementById('aiSettProvider').value;
+      const apiKey = document.getElementById('aiSettApiKey').value;
+      const model = document.getElementById('aiSettModel').value;
+      const completionModel = document.getElementById('aiSettCompletionModel').value;
+
+      const update = { provider };
+      if (apiKey) update.apiKey = apiKey;
+      if (model) update.model = model;
+      update.completionModel = completionModel;
+
+      send({ type: 'ai_set_config', ...update });
+      closeAiSettingsDialog();
+    }
+
+    // ─── Snippet completions ────────────────────────
+    function registerSnippetCompletions() {
+      if (!monaco || !monaco.languages) return;
+
+      monaco.languages.registerCompletionItemProvider('typescript', {
+        triggerCharacters: [],
+        provideCompletionItems: (model, position) => {
+          if (!loadedSnippets.length) return { suggestions: [] };
+
+          const word = model.getWordUntilPosition(position);
+          const range = {
+            startLineNumber: position.lineNumber,
+            startColumn: word.startColumn,
+            endLineNumber: position.lineNumber,
+            endColumn: position.column,
+          };
+
+          const suggestions = loadedSnippets.map((s, i) => ({
+            label: s.activation,
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            documentation: s.description || s.name,
+            detail: s.name,
+            insertText: s.code,
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            range,
+            sortText: '!' + String(i).padStart(3, '0'),
+          }));
+
+          return { suggestions };
+        },
+      });
+    }
+
+    // ─── AI Inline completions ──────────────────────
+    function registerAiInlineCompletions() {
+      if (!monaco || !monaco.languages) return;
+
+      let debounceTimer = null;
+
+      monaco.languages.registerInlineCompletionsProvider('typescript', {
+        provideInlineCompletions: async (model, position, context, token) => {
+          if (!aiConfig.configured) return { items: [] };
+
+          // Debounce: wait 600ms after last keystroke
+          if (debounceTimer) clearTimeout(debounceTimer);
+
+          return new Promise((resolve) => {
+            debounceTimer = setTimeout(async () => {
+              if (token.isCancellationRequested) { resolve({ items: [] }); return; }
+
+              const prefix = model.getValueInRange({
+                startLineNumber: 1, startColumn: 1,
+                endLineNumber: position.lineNumber, endColumn: position.column,
+              });
+              const suffix = model.getValueInRange({
+                startLineNumber: position.lineNumber, startColumn: position.column,
+                endLineNumber: model.getLineCount(), endColumn: model.getLineMaxColumn(model.getLineCount()),
+              });
+
+              // Skip if line is empty or just whitespace and very short prefix
+              if (prefix.trim().length < 10) { resolve({ items: [] }); return; }
+
+              // Gather other open files for context (limit to 3)
+              const otherFiles = [];
+              for (const [path, tab] of openTabs) {
+                if (path !== activeTab && tab.model) {
+                  otherFiles.push({ path, content: tab.model.getValue().slice(0, 3000) });
+                  if (otherFiles.length >= 3) break;
+                }
+              }
+
+              // Entity context
+              let entityContext = '';
+              if (cachedEntityIds && cachedEntityIds.length > 0) {
+                entityContext = cachedEntityIds.slice(0, 60).map(e => e.id).join(', ');
+              }
+
+              const id = ++aiCompletionId;
+
+              try {
+                const text = await new Promise((res, rej) => {
+                  aiCompletionResolve = res;
+                  send({
+                    type: 'ai_complete',
+                    id,
+                    prefix: prefix.slice(-3000),
+                    suffix: suffix.slice(0, 1000),
+                    filePath: model.uri.path.replace(/^\/+/, ''),
+                    otherFiles,
+                    entityContext,
+                  });
+
+                  // Timeout after 8s
+                  setTimeout(() => { if (aiCompletionResolve === res) { aiCompletionResolve = null; res(''); } }, 8000);
+                });
+
+                if (!text || token.isCancellationRequested) { resolve({ items: [] }); return; }
+
+                resolve({
+                  items: [{
+                    insertText: text,
+                    range: {
+                      startLineNumber: position.lineNumber,
+                      startColumn: position.column,
+                      endLineNumber: position.lineNumber,
+                      endColumn: position.column,
+                    },
+                  }],
+                });
+              } catch {
+                resolve({ items: [] });
+              }
+            }, 600);
+          });
+        },
+        freeInlineCompletions: () => {},
+      });
+    }
+
+    // Fetch SKILL.md for AI context once
+    function fetchSkillForAi() {
+      send({ type: 'get_skill_file' });
+      // The existing skill_file handler stores it via handleSkillDownload;
+      // we piggyback: also cache it for AI
+      const origHandler = window._origSkillHandler;
+      // We'll intercept in handleMessage instead — see ai_skill_cache below
     }
   </script>
 </body>
