@@ -327,6 +327,11 @@ server.on("upgrade", (request, socket, head) => {
 wss.on("connection", (ws) => {
   logger.log("debug", "ws", "UI client connected");
 
+  // Send server config (sync path, etc.) so the UI can show accurate paths.
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: "server_config", data: { syncPath, automationsPath: AUTOMATIONS_PATH } }));
+  }
+
   // Forward logs
   const unsubLog = logger.onLog((entry) => {
     if (ws.readyState === WebSocket.OPEN) {

@@ -64,12 +64,14 @@ export abstract class Automation {
   /**
    * Create a new automation instance.
    *
-   * @param id - Optional custom ID. If omitted, an ID is auto-generated from the class name
-   *   with an incrementing counter (e.g., `"MotionLight1"`, `"MotionLight2"`).
+   * @param id - Optional custom ID. If omitted, an ID is auto-generated from the class name.
+   *   The first instance of a class uses the class name unchanged; subsequent instances get
+   *   an incrementing numeric suffix (e.g., `"MotionLight"`, `"MotionLight2"`, `"MotionLight3"`).
    *
    * @example
    * // Auto-generated ID
-   * const auto = new MotionLightAutomation();  // → id: "MotionLightAutomation1"
+   * const a = new MotionLightAutomation();  // → id: "MotionLightAutomation"
+   * const b = new MotionLightAutomation();  // → id: "MotionLightAutomation2"
    *
    * // Custom ID
    * const auto = new MotionLightAutomation('kitchen-motion');  // → id: "kitchen-motion"
@@ -82,7 +84,7 @@ export abstract class Automation {
     } else {
       const count = (classCounters.get(this.className) || 0) + 1;
       classCounters.set(this.className, count);
-      this.id = `${this.className}${count}`;
+      this.id = count === 1 ? this.className : `${this.className}${count}`;
     }
 
     // Set up namespaced storage
@@ -231,9 +233,10 @@ export abstract class Automation {
    */
   subscribeToStateChangeEvent(
     entityId: string,
-    callback: StateChangeCallback
+    callback: StateChangeCallback,
+    emitAll?: boolean
   ): UnsubscribeFunction {
-    return getManager().subscribeToStateChangeEvent(this, entityId, callback);
+    return getManager().subscribeToStateChangeEvent(this, entityId, callback, emitAll);
   }
 
   /**
@@ -252,8 +255,8 @@ export abstract class Automation {
    *   }
    * });
    */
-  onStateChange(callback: StateChangeCallback): UnsubscribeFunction {
-    return getManager().onStateChange(this, callback);
+  onStateChange(callback: StateChangeCallback, emitAll?: boolean): UnsubscribeFunction {
+    return getManager().onStateChange(this, callback, emitAll);
   }
 
   /**
@@ -319,5 +322,17 @@ export abstract class Automation {
   /** Log a debug message. */
   debug(message: any, extra?: any): void {
     getManager().logMessage("debug", this.id, message, extra);
+  }
+
+  /**
+   * Sleep for a number of milliseconds.
+   *
+   * @param ms - Time to wait in milliseconds.
+   *
+   * @example
+   * await this.sleep(500);
+   */
+  sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

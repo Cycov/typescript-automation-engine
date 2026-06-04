@@ -196,6 +196,7 @@
       margin-bottom: 2px;
     }
     .automation-item:hover { background: var(--bg-input); }
+    .automation-item .auto-name:hover { color: var(--accent); }
     .automation-item .state-indicator {
       width: 6px; height: 6px;
       border-radius: 50%;
@@ -248,8 +249,22 @@
     .file-item.active { background: var(--bg-input); color: var(--accent); }
     .file-item.selected { background: var(--bg-input); outline: 1px solid var(--accent); }
     .file-item.drag-over { background: rgba(88, 166, 255, 0.15); outline: 1px dashed var(--accent); }
-    .file-item .icon { color: var(--text-dim); font-size: 11px; width: 14px; text-align: center; }
+    .file-item .icon {
+      color: var(--text-dim);
+      font-size: 11px;
+      width: 16px;
+      text-align: center;
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
     .file-item.directory .icon { color: var(--yellow); }
+    /* SVG file icons */
+    .file-icon-svg { width: 14px; height: 14px; display: block; }
+    .file-item.file-ts .icon { color: #3178c6; }
+    .file-item.file-json .icon { color: #cbcb41; }
+    .file-item.file-snippets .icon { color: var(--text-dim); }
     .file-item .file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .file-item .file-delete {
       opacity: 0;
@@ -276,6 +291,109 @@
     }
     .file-children { padding-left: 12px; }
     .file-children.drag-over { background: rgba(88, 166, 255, 0.08); }
+
+    /* ─── Sidebar collapsed states ──────────────── */
+    .sidebar.collapsed { width: 0 !important; min-width: 0 !important; border-right: none; }
+    .sidebar.collapsed > * { display: none !important; }
+    .bottom-panel.collapsed { height: 28px !important; min-height: 28px; }
+    .bottom-panel.collapsed .log-area,
+    .bottom-panel.collapsed .terminal-area { display: none !important; }
+    .bottom-panel.collapsed .resize-handle { display: none; }
+    .panel-collapse-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 14px;
+      padding: 0 8px;
+      line-height: 1;
+    }
+    .panel-collapse-btn:hover { color: var(--text); }
+    .sidebar-show-btn {
+      position: fixed;
+      bottom: 8px;
+      left: 4px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      z-index: 50;
+      display: none;
+    }
+    .sidebar-show-btn.visible { display: block; }
+    .sidebar-show-btn:hover { color: var(--text); border-color: var(--accent); }
+
+    /* ─── AI panel (Work with AI section in sidebar) ─ */
+    .ai-panel-section {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin: 8px;
+      background: var(--bg-tertiary);
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .ai-panel-section summary {
+      cursor: pointer;
+      padding: 8px 10px;
+      font-size: 11px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      user-select: none;
+      list-style: none;
+    }
+    .ai-panel-section summary::-webkit-details-marker { display: none; }
+    .ai-panel-section summary::before {
+      content: '▸';
+      display: inline-block;
+      margin-right: 6px;
+      font-size: 9px;
+      transition: transform 0.15s;
+    }
+    .ai-panel-section[open] summary::before { transform: rotate(90deg); }
+    .ai-panel-content {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 4px 10px 10px;
+    }
+    .ai-panel-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      background: var(--bg-secondary);
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+    .ai-panel-row > div { flex: 1; min-width: 0; }
+    .ai-panel-row .row-title { font-weight: 600; font-size: 12px; }
+    .ai-panel-row .row-desc { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+    .ai-panel-row .btn { flex-shrink: 0; }
+
+    /* Provider help block in AI settings dialog */
+    .ai-provider-help {
+      font-size: 11px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 8px 10px;
+      margin-bottom: 12px;
+      color: var(--text-dim);
+      line-height: 1.5;
+    }
+    .ai-provider-help a { color: var(--accent); text-decoration: none; }
+    .ai-provider-help a:hover { text-decoration: underline; }
+    .ai-provider-help code { background: var(--bg-input); padding: 1px 4px; border-radius: 3px; font-size: 10px; }
+    .ai-provider-help strong { color: var(--text); }
+
+    /* ─── Tablet / small-screen overrides ─── */
+    body.is-tablet .tab .close-tab { opacity: 1 !important; }
+    body.is-tablet .automation-item .auto-actions { opacity: 1 !important; }
+    body.is-tablet .file-item .file-delete { opacity: 1 !important; }
 
     /* ─── Center Panel ──────────────────────────────── */
     .center-panel {
@@ -889,7 +1007,6 @@
       <button class="btn" onclick="showExportDialog()">Export</button>
       <button class="btn" onclick="showYamlToTsDialog()" title="Convert YAML attributes to TypeScript interface">YAML→TS</button>
       <button class="btn" onclick="showImportDialog()">Import</button>
-      <button class="btn" onclick="showAiDialog()" title="Export entities/devices and SKILL.md for AI editing">Work with AI</button>
       <button class="btn" onclick="showHelpPanel()" title="Keyboard shortcuts & help">Help</button>
       <button class="btn btn-accent" onclick="toggleAiChat()" id="aiChatBtn" title="AI Chat (Ctrl+Shift+I)">🤖 AI</button>
       <button class="btn btn-reload" onclick="reload()" id="reloadBtn">⟳ Reload</button>
@@ -897,13 +1014,15 @@
   </header>
 
   <div class="main-layout">
+    <button class="sidebar-show-btn" id="sidebarShowBtn" onclick="toggleSidebar()" title="Show sidebar">› Show sidebar</button>
     <!-- Left Sidebar -->
     <div class="sidebar" id="sidebar">
       <div class="sidebar-h-resize" id="sidebarHResize"></div>
       <!-- Automations -->
       <div class="sidebar-section" id="sidebarAutomations" style="flex: 1;">
         <div class="sidebar-header">
-          Automations <span class="badge" id="autoCount">0</span>
+          <span>Automations <span class="badge" id="autoCount">0</span></span>
+          <button class="panel-collapse-btn" onclick="toggleSidebar()" title="Hide sidebar" style="margin-left:auto;">‹</button>
         </div>
         <div class="automation-list" id="automationList">
           <div class="empty-state">No automations loaded</div>
@@ -922,7 +1041,7 @@
             <button class="btn" style="padding: 1px 6px; font-size: 10px;" onclick="refreshFiles()">↻</button>
           </div>
         </div>
-        <div class="file-tree" id="fileTree" tabindex="0">
+        <div class="file-tree" id="fileTree" tabindex="0" onclick="onFileTreeBlankClick(event)">
           <div class="empty-state">Loading...</div>
         </div>
       </div>
@@ -960,6 +1079,7 @@
       <!-- Bottom panel -->
       <div class="bottom-panel" id="bottomPanel">
         <div class="bottom-panel-header">
+          <button class="panel-collapse-btn" id="bottomCollapseBtn" onclick="toggleBottomPanel()" title="Collapse/expand bottom panel">⌄</button>
           <div class="panel-tabs">
             <div class="panel-tab active" data-panel="logs" onclick="switchPanel('logs')">Output</div>
             <div class="panel-tab" data-panel="terminal" onclick="switchPanel('terminal')">Terminal</div>
@@ -1005,6 +1125,25 @@
         <button class="btn" onclick="toggleAiChat()" title="Close">✕</button>
       </div>
       <div class="ai-messages" id="aiMessages">
+        <details class="ai-panel-section" id="aiWorkPanel">
+          <summary>Work with AI — Export Context</summary>
+          <div class="ai-panel-content">
+            <div class="ai-panel-row">
+              <div>
+                <div class="row-title">Entities &amp; Devices</div>
+                <div class="row-desc">All HA entities with friendly names, states, domains</div>
+              </div>
+              <button class="btn btn-accent" onclick="downloadEntities()" id="aiEntitiesBtn">Download .txt</button>
+            </div>
+            <div class="ai-panel-row">
+              <div>
+                <div class="row-title">SKILL.md</div>
+                <div class="row-desc">TAE skill file — API reference, patterns, templates</div>
+              </div>
+              <button class="btn btn-accent" onclick="downloadSkillFile()" id="aiSkillBtn">Download .md</button>
+            </div>
+          </div>
+        </details>
         <div class="ai-msg ai-msg-assistant" style="color: var(--text-dim); font-size: 11px;">
           Ask questions about your automations, get help writing TAE code, or describe what you want to automate.
         </div>
@@ -1065,7 +1204,7 @@
     <div class="dialog">
       <h3>⚠ Export to Sync</h3>
       <p>
-        This will overwrite everything at the sync path with the current automation files.
+        This will overwrite everything at the sync path (<code id="exportSyncPath" style="background: var(--bg-input); padding: 1px 4px; border-radius: 3px;">/share/tae</code>) with the current automation files.
         Any files previously at the sync path will be replaced.
       </p>
       <div class="dialog-actions">
@@ -1118,33 +1257,6 @@ supported_features: 40"></textarea>
         <button class="btn" onclick="closeYamlToTsDialog()">Cancel</button>
         <button class="btn btn-accent" onclick="generateYamlPreview()">Generate</button>
         <button class="btn btn-accent" id="yamlCopyBtn" style="display:none;" onclick="copyYamlResult()">Copy to Clipboard</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Work with AI dialog -->
-  <div class="dialog-overlay" id="aiDialog">
-    <div class="dialog" style="min-width: 480px;">
-      <h3>🤖 Work with AI</h3>
-      <p>Export context files for use with AI assistants when writing automations.</p>
-      <div style="display: flex; flex-direction: column; gap: 12px; margin: 16px 0;">
-        <div style="display: flex; align-items: center; gap: 12px; padding: 10px; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border);">
-          <div style="flex: 1;">
-            <div style="font-weight: 600; font-size: 13px;">Entities &amp; Devices</div>
-            <div style="font-size: 11px; color: var(--text-dim); margin-top: 2px;">All Home Assistant entities with friendly names, states, and domains</div>
-          </div>
-          <button class="btn btn-accent" onclick="downloadEntities()" id="aiEntitiesBtn">Download .txt</button>
-        </div>
-        <div style="display: flex; align-items: center; gap: 12px; padding: 10px; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border);">
-          <div style="flex: 1;">
-            <div style="font-weight: 600; font-size: 13px;">SKILL.md</div>
-            <div style="font-size: 11px; color: var(--text-dim); margin-top: 2px;">TAE automation skill file — API reference, patterns, and templates</div>
-          </div>
-          <button class="btn btn-accent" onclick="downloadSkillFile()" id="aiSkillBtn">Download .md</button>
-        </div>
-      </div>
-      <div class="dialog-actions">
-        <button class="btn" onclick="closeAiDialog()">Close</button>
       </div>
     </div>
   </div>
@@ -1202,13 +1314,14 @@ supported_features: 40"></textarea>
       <p>Configure the AI provider for inline completions and chat. Settings are saved in the addon config, but you can override them here for this session.</p>
       <div style="margin-bottom: 12px;">
         <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;">Provider</label>
-        <select id="aiSettProvider" style="width: 100%; background: var(--bg-input); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 4px; font-family: inherit; font-size: 12px;">
+        <select id="aiSettProvider" onchange="updateAiProviderHelp()" style="width: 100%; background: var(--bg-input); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 4px; font-family: inherit; font-size: 12px;">
           <option value="none">None (disabled)</option>
           <option value="github">GitHub Models</option>
           <option value="openai">OpenAI</option>
           <option value="anthropic">Anthropic</option>
         </select>
       </div>
+      <div id="aiProviderHelp" class="ai-provider-help" style="display:none;"></div>
       <div style="margin-bottom: 12px;">
         <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;">API Key</label>
         <input type="password" id="aiSettApiKey" style="width: 100%; background: var(--bg-input); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 4px; font-family: inherit; font-size: 12px; outline: none;" placeholder="GitHub PAT, OpenAI key, or Anthropic key" />
@@ -1260,6 +1373,10 @@ supported_features: 40"></textarea>
     let aiCompletionResolve = null;
     let aiSkillMdCache = null;
     let loadedSnippets = []; // { name, description, activation, code }
+    let serverSyncPath = '/share/tae';
+    let automationClassMap = new Map(); // automationId -> { file, line, className }
+    let expandedFolders = new Set();    // persisted across renders (paths)
+    const isTabletSize = () => window.matchMedia('(max-width: 900px), (pointer: coarse)').matches;
 
     // ─── WebSocket ──────────────────────────────────
     function connectWS() {
@@ -1303,6 +1420,13 @@ supported_features: 40"></textarea>
 
     function handleMessage(msg) {
       switch (msg.type) {
+        case 'server_config':
+          if (msg.data) {
+            serverSyncPath = msg.data.syncPath || '/share/tae';
+            const el = document.getElementById('exportSyncPath');
+            if (el) el.textContent = serverSyncPath;
+          }
+          break;
         case 'automations':
           automations = msg.data || [];
           renderAutomations();
@@ -1447,11 +1571,12 @@ supported_features: 40"></textarea>
       }
 
       list.innerHTML = automations.map(a => `
-        <div class="automation-item" title="${a.id} (${a.className})\nState: ${a.state}${a.error ? '\nError: ' + a.error : ''}">
+        <div class="automation-item" title="${a.id} (${a.className})\nClick to jump to class\nState: ${a.state}${a.error ? '\nError: ' + a.error : ''}"
+             onclick="jumpToAutomationClass('${escapeAttr(a.id)}', '${escapeAttr(a.className)}')">
           <div class="state-indicator ${a.state}"></div>
           <span class="auto-name">${a.id}</span>
           <span class="auto-state">${a.state}</span>
-          <div class="auto-actions">
+          <div class="auto-actions" onclick="event.stopPropagation()">
             ${a.state === 'running'
               ? `<button class="btn" onclick="stopAuto('${a.id}')">Stop</button>`
               : `<button class="btn btn-accent" onclick="startAuto('${a.id}')">Start</button>`
@@ -1481,9 +1606,15 @@ supported_features: 40"></textarea>
     }
 
     function renderFileItems(items, parentPath) {
-      return items.map(item => {
+      // Sort: folders first (alphabetical), then files (alphabetical)
+      const sorted = [...items].sort((a, b) => {
+        if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+      return sorted.map(item => {
         const itemPath = item.path;
         if (item.isDirectory) {
+          const isOpen = expandedFolders.has(itemPath);
           return `
             <div>
               <div class="file-item directory${selectedFilePath === itemPath ? ' selected' : ''}"
@@ -1492,12 +1623,12 @@ supported_features: 40"></textarea>
                    ondragover="onDragOver(event, this)"
                    ondragleave="onDragLeave(event, this)"
                    ondrop="onDrop(event, '${escapeAttr(itemPath)}')">
-                <span class="icon">▸</span>
+                <span class="icon">${folderIconSvg(isOpen)}</span>
                 <span class="file-name">${escapeHtml(item.name)}</span>
                 <span class="file-delete" onclick="event.stopPropagation(); showDeleteDialog('${escapeAttr(itemPath)}')" title="Delete">✕</span>
               </div>
               <div class="file-children"
-                   style="display:none;"
+                   style="display:${isOpen ? 'block' : 'none'};"
                    ondragover="onDragOverChildren(event, this)"
                    ondragleave="onDragLeaveChildren(event, this)"
                    ondrop="onDropChildren(event, '${escapeAttr(itemPath)}')">
@@ -1507,13 +1638,14 @@ supported_features: 40"></textarea>
         } else {
           const isActive = activeTab === itemPath;
           const isSelected = selectedFilePath === itemPath;
+          const ext = item.name.includes('.') ? item.name.slice(item.name.lastIndexOf('.') + 1).toLowerCase() : '';
           return `
-            <div class="file-item${isActive ? ' active' : ''}${isSelected ? ' selected' : ''}"
+            <div class="file-item file-${ext}${isActive ? ' active' : ''}${isSelected ? ' selected' : ''}"
                  draggable="true"
                  onclick="selectFile('${escapeAttr(itemPath)}', false, event)"
                  ondblclick="startRename('${escapeAttr(itemPath)}', '${escapeAttr(item.name)}', false, event)"
                  ondragstart="onDragStart(event, '${escapeAttr(itemPath)}')">
-              <span class="icon">📄</span>
+              <span class="icon">${fileIconSvg(ext)}</span>
               <span class="file-name">${escapeHtml(item.name)}</span>
               <span class="file-delete" onclick="event.stopPropagation(); showDeleteDialog('${escapeAttr(itemPath)}')" title="Delete">✕</span>
             </div>`;
@@ -1521,22 +1653,42 @@ supported_features: 40"></textarea>
       }).join('');
     }
 
+    function folderIconSvg(open) {
+      if (open) {
+        return '<svg class="file-icon-svg" viewBox="0 0 16 16" fill="currentColor"><path d="M1.75 2A1.75 1.75 0 0 0 0 3.75v8.5C0 13.216.784 14 1.75 14h12.5A1.75 1.75 0 0 0 16 12.25v-7A1.75 1.75 0 0 0 14.25 3.5H7.5l-1-1.25A1.75 1.75 0 0 0 5.13 2H1.75Z"/></svg>';
+      }
+      return '<svg class="file-icon-svg" viewBox="0 0 16 16" fill="currentColor"><path d="M1.75 2.5A1.75 1.75 0 0 0 0 4.25v7.5C0 12.716.784 13.5 1.75 13.5h12.5A1.75 1.75 0 0 0 16 11.75v-6A1.75 1.75 0 0 0 14.25 4H7.5l-1-1.25A1.75 1.75 0 0 0 5.13 2.5H1.75Z"/></svg>';
+    }
+
+    function fileIconSvg(ext) {
+      if (ext === 'ts' || ext === 'tsx') {
+        return '<svg class="file-icon-svg" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="14" height="14" rx="1.5"/><text x="8" y="11" font-size="6" font-weight="700" text-anchor="middle" fill="#fff" font-family="sans-serif">TS</text></svg>';
+      }
+      if (ext === 'json') {
+        return '<svg class="file-icon-svg" viewBox="0 0 16 16" fill="currentColor"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.5c.464 0 .909.184 1.237.513l3.5 3.5c.328.328.513.773.513 1.237v9C15.5 15.216 14.716 16 13.75 16h-10A1.75 1.75 0 0 1 2 14.25V1.75Z" opacity="0.4"/><text x="8" y="11" font-size="5" font-weight="700" text-anchor="middle" fill="currentColor" font-family="sans-serif">{ }</text></svg>';
+      }
+      // Default file icon (page)
+      return '<svg class="file-icon-svg" viewBox="0 0 16 16" fill="currentColor"><path d="M2 1.75C2 .784 2.784 0 3.75 0h5.586c.464 0 .909.184 1.237.513l3.914 3.914c.329.328.513.773.513 1.237v8.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25V1.75Z" opacity="0.7"/></svg>';
+    }
+
     function selectFile(filePath, isDirectory, event) {
       event.stopPropagation();
       selectedFilePath = filePath;
 
       if (isDirectory) {
-        // Toggle directory
+        // Toggle directory + persist expansion state across rerenders
         const el = event.currentTarget;
         const children = el.nextElementSibling;
         const icon = el.querySelector('.icon');
         if (children && children.classList.contains('file-children')) {
           if (children.style.display === 'none') {
             children.style.display = 'block';
-            icon.textContent = '▾';
+            expandedFolders.add(filePath);
+            if (icon) icon.innerHTML = folderIconSvg(true);
           } else {
             children.style.display = 'none';
-            icon.textContent = '▸';
+            expandedFolders.delete(filePath);
+            if (icon) icon.innerHTML = folderIconSvg(false);
           }
         }
       } else {
@@ -1708,6 +1860,9 @@ supported_features: 40"></textarea>
         }
       }
 
+      // Auto-expand parent folder so the newly created item is visible after rerender
+      if (parentPath) expandedFolders.add(parentPath);
+
       const fullPath = parentPath ? `${parentPath}/${name}` : name;
       send({ type: 'create_file', path: fullPath, isDirectory: newFileIsDirectory, content: '' });
     }
@@ -1805,6 +1960,33 @@ supported_features: 40"></textarea>
       send({ type: 'get_files' });
     }
 
+    function onFileTreeBlankClick(event) {
+      // Only clear selection if user clicked the empty tree background, not an item
+      if (event.target.id === 'fileTree') {
+        selectedFilePath = null;
+        document.querySelectorAll('.file-item.selected').forEach(el => el.classList.remove('selected'));
+      }
+    }
+
+    // ─── Sidebar / Bottom panel collapse ────────────
+    function toggleSidebar() {
+      const sb = document.getElementById('sidebar');
+      const showBtn = document.getElementById('sidebarShowBtn');
+      sb.classList.toggle('collapsed');
+      showBtn.classList.toggle('visible', sb.classList.contains('collapsed'));
+      try { localStorage.setItem('tae_sidebar_collapsed', sb.classList.contains('collapsed') ? '1' : '0'); } catch {}
+    }
+
+    function toggleBottomPanel() {
+      const bp = document.getElementById('bottomPanel');
+      bp.classList.toggle('collapsed');
+      const btn = document.getElementById('bottomCollapseBtn');
+      if (btn) btn.textContent = bp.classList.contains('collapsed') ? '⌃' : '⌄';
+      try { localStorage.setItem('tae_bottom_collapsed', bp.classList.contains('collapsed') ? '1' : '0'); } catch {}
+      // Re-layout monaco
+      if (monacoEditor) setTimeout(() => monacoEditor.layout(), 120);
+    }
+
     // ─── Editor/Tabs ────────────────────────────────
     function openFile(filePath, content) {
       if (!monacoReady) {
@@ -1846,7 +2028,8 @@ supported_features: 40"></textarea>
       if (tabInfo.viewState) {
         monacoEditor.restoreViewState(tabInfo.viewState);
       }
-      monacoEditor.focus();
+      // On tablets, avoid auto-focusing (which opens the on-screen keyboard)
+      if (!isTabletSize()) monacoEditor.focus();
 
       renderTabs();
     }
@@ -2135,6 +2318,24 @@ supported_features: 40"></textarea>
       } else if (welcome) {
         welcome.style.display = 'none';
       }
+      // On tablets/small screens with no file open, expand the bottom panel to fill the area
+      if (isTabletSize()) {
+        const editorContainer = document.getElementById('editorContainer');
+        const resizeHandle = document.getElementById('resizeHandle');
+        const bp = document.getElementById('bottomPanel');
+        if (show) {
+          // Hide editor, expand bottom panel
+          editorContainer.style.display = 'none';
+          if (resizeHandle) resizeHandle.style.display = 'none';
+          bp.style.flex = '1';
+          bp.style.height = 'auto';
+        } else {
+          editorContainer.style.display = '';
+          if (resizeHandle) resizeHandle.style.display = '';
+          bp.style.flex = '';
+          bp.style.height = '';
+        }
+      }
     }
 
     function loadTypeDefinitions() {
@@ -2189,6 +2390,8 @@ supported_features: 40"></textarea>
     }
 
     function handleAllFileContents(files) {
+      // Always rebuild the class -> file map (works even before Monaco is ready)
+      rebuildAutomationClassMap(files);
       if (!monacoReady) return;
       for (const f of files) {
         const uri = monaco.Uri.parse('file:///' + f.path);
@@ -2204,6 +2407,45 @@ supported_features: 40"></textarea>
         }
         window._bgModels.set(f.path, model);
       }
+    }
+
+    function rebuildAutomationClassMap(files) {
+      automationClassMap.clear();
+      // Match: class FooBar extends Automation
+      const re = /class\s+([A-Za-z_$][\w$]*)\s+extends\s+Automation\b/g;
+      for (const f of files) {
+        if (!f.path.endsWith('.ts')) continue;
+        const lines = (f.content || '').split('\n');
+        for (let i = 0; i < lines.length; i++) {
+          const m = re.exec(lines[i]);
+          re.lastIndex = 0;
+          if (m) {
+            automationClassMap.set(m[1], { file: f.path, line: i + 1, className: m[1] });
+          }
+        }
+      }
+    }
+
+    function jumpToAutomationClass(automationId, className) {
+      const info = automationClassMap.get(className);
+      if (!info) {
+        addLocalLog('warn', 'ui', `Could not find class ${className} in any file`);
+        return;
+      }
+      requestFile(info.file);
+      // Wait for tab/model to be active, then reveal line
+      const tryReveal = (attempts) => {
+        if (!monacoEditor || activeTab !== info.file) {
+          if (attempts > 0) setTimeout(() => tryReveal(attempts - 1), 80);
+          return;
+        }
+        try {
+          monacoEditor.revealLineInCenter(info.line);
+          monacoEditor.setPosition({ lineNumber: info.line, column: 1 });
+          if (!isTabletSize()) monacoEditor.focus();
+        } catch {}
+      };
+      tryReveal(40);
     }
 
     // ─── Logs ───────────────────────────────────────
@@ -2283,6 +2525,9 @@ supported_features: 40"></textarea>
     }
 
     function applyLogFilter() {
+      try {
+        localStorage.setItem('tae_log_level', document.getElementById('logLevelFilter').value);
+      } catch {}
       renderLogs();
     }
 
@@ -2419,13 +2664,14 @@ supported_features: 40"></textarea>
     }
 
     // ─── Work with AI ───────────────────────────────
+    // (Dialog removed; section is now inside the AI sidebar.)
     function showAiDialog() {
-      document.getElementById('aiDialog').classList.add('active');
+      // Open AI sidebar and expand the Work-with-AI section
+      if (!aiChatOpen) toggleAiChat();
+      const sec = document.getElementById('aiWorkPanel');
+      if (sec) sec.open = true;
     }
-
-    function closeAiDialog() {
-      document.getElementById('aiDialog').classList.remove('active');
-    }
+    function closeAiDialog() { /* no-op (legacy) */ }
 
     function downloadEntities() {
       const btn = document.getElementById('aiEntitiesBtn');
@@ -3350,8 +3596,44 @@ supported_features: 40"></textarea>
     setupHorizontalSidebarResize();
     setupLogScrollDetection();
     restoreSession();
+    restoreUiPreferences();
     connectWS();
     initMonaco();
+
+    function restoreUiPreferences() {
+      // Tablet flag
+      if (isTabletSize()) document.body.classList.add('is-tablet');
+      window.addEventListener('resize', () => {
+        document.body.classList.toggle('is-tablet', isTabletSize());
+      });
+      // Persisted log level
+      try {
+        const lvl = localStorage.getItem('tae_log_level');
+        if (lvl) {
+          const sel = document.getElementById('logLevelFilter');
+          if (sel) sel.value = lvl;
+        }
+      } catch {}
+      // Sidebar collapsed
+      try {
+        if (localStorage.getItem('tae_sidebar_collapsed') === '1') {
+          const sb = document.getElementById('sidebar');
+          sb.classList.add('collapsed');
+          document.getElementById('sidebarShowBtn').classList.add('visible');
+        }
+      } catch {}
+      // Bottom panel collapsed
+      try {
+        if (localStorage.getItem('tae_bottom_collapsed') === '1') {
+          document.getElementById('bottomPanel').classList.add('collapsed');
+          const btn = document.getElementById('bottomCollapseBtn');
+          if (btn) btn.textContent = '⌃';
+        } else {
+          const btn = document.getElementById('bottomCollapseBtn');
+          if (btn) btn.textContent = '⌄';
+        }
+      } catch {}
+    }
 
     // Warn on page leave with unsaved changes
     window.addEventListener('beforeunload', (e) => {
@@ -3914,7 +4196,47 @@ supported_features: 40"></textarea>
       document.getElementById('aiSettCompletionModel').value = aiConfig.completionModel || '';
       document.getElementById('aiSettStatus').textContent = aiConfig.configured ? '✓ Currently configured' : '✗ Not configured';
       document.getElementById('aiSettStatus').style.color = aiConfig.configured ? 'var(--green)' : 'var(--text-dim)';
+      updateAiProviderHelp();
       document.getElementById('aiSettingsDialog').classList.add('active');
+    }
+
+    function updateAiProviderHelp() {
+      const provider = document.getElementById('aiSettProvider').value;
+      const help = document.getElementById('aiProviderHelp');
+      if (!help) return;
+      let html = '';
+      if (provider === 'github') {
+        html = `
+          <strong>GitHub Models</strong> — free with a GitHub account (rate-limited).<br>
+          1. Go to <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener">github.com/settings/personal-access-tokens</a> → <em>Generate new token (fine-grained)</em><br>
+          2. Under <strong>Permissions → Account permissions</strong>, grant <code>Models: Read-only</code>.<br>
+          3. Paste the token below as your API key.<br>
+          <strong>Models:</strong> <code>gpt-4o</code>, <code>gpt-4o-mini</code>, <code>gpt-5</code>, <code>Phi-3.5-MoE-instruct</code>, <code>Mistral-large-2407</code>, etc. See <a href="https://github.com/marketplace/models" target="_blank" rel="noopener">marketplace/models</a>.<br>
+          <em>Note:</em> some models (e.g. <code>gpt-5</code>) require default temperature only.
+        `;
+      } else if (provider === 'openai') {
+        html = `
+          <strong>OpenAI</strong> — paid API access.<br>
+          1. Go to <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com/api-keys</a><br>
+          2. Click <em>Create new secret key</em> and copy it (starts with <code>sk-...</code>).<br>
+          3. Make sure your account has billing enabled.<br>
+          <strong>Models:</strong> <code>gpt-4o</code>, <code>gpt-4o-mini</code>, <code>gpt-4-turbo</code>, <code>o1</code>, <code>o1-mini</code>.<br>
+          For inline completions, prefer a fast model like <code>gpt-4o-mini</code>.
+        `;
+      } else if (provider === 'anthropic') {
+        html = `
+          <strong>Anthropic</strong> — paid API access.<br>
+          1. Go to <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com/settings/keys</a><br>
+          2. Click <em>Create Key</em> and copy it (starts with <code>sk-ant-...</code>).<br>
+          3. Add credits to your workspace if needed.<br>
+          <strong>Models:</strong> <code>claude-sonnet-4-20250514</code>, <code>claude-3-5-sonnet-latest</code>, <code>claude-3-5-haiku-latest</code>, <code>claude-3-opus-latest</code>.
+        `;
+      } else {
+        help.style.display = 'none';
+        return;
+      }
+      help.innerHTML = html;
+      help.style.display = 'block';
     }
 
     function closeAiSettingsDialog() {

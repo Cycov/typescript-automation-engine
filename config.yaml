@@ -1,6 +1,6 @@
 name: "TypeScript Automation Engine"
 description: "Write and run Home Assistant automations in TypeScript with a managed runtime"
-version: "1.6.0"
+version: "1.7.0"
 slug: "typescript_automation_engine"
 url: "https://github.com/youruser/ha-addon-tae"
 arch:

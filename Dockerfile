@@ -43,6 +43,6 @@ LABEL \
     io.hass.name="TypeScript Automation Engine" \
     io.hass.description="Write and run Home Assistant automations in TypeScript" \
     io.hass.type="addon" \
-    io.hass.version="1.6.0"
+    io.hass.version="1.7.0"
 
 CMD ["/run.sh"]

@@ -92,9 +92,10 @@ export function subscribeToEvent(
 export function subscribeToStateChangeEvent(
   automation: Automation,
   entityId: string,
-  callback: (data: any) => void | Promise<void>
+  callback: (data: any) => void | Promise<void>,
+  emitAll?: boolean
 ): () => void {
-  return getManager().subscribeToStateChangeEvent(automation, entityId, callback);
+  return getManager().subscribeToStateChangeEvent(automation, entityId, callback, emitAll);
 }
 
 /**
@@ -102,9 +103,25 @@ export function subscribeToStateChangeEvent(
  */
 export function onStateChange(
   automation: Automation,
-  callback: (data: any) => void | Promise<void>
+  callback: (data: any) => void | Promise<void>,
+  emitAll?: boolean
 ): () => void {
-  return getManager().onStateChange(automation, callback);
+  return getManager().onStateChange(automation, callback, emitAll);
+}
+
+/**
+ * Get a list of all currently registered automation instances
+ * (id, className, state). Useful for inspecting or driving start/stop
+ * decisions from another automation or a startup script.
+ *
+ * @example
+ * import { getAutomations, stopAutomation } from 'tae';
+ * for (const a of getAutomations()) {
+ *   console.log(a.id, a.state);
+ * }
+ */
+export function getAutomations(): Array<{ id: string; className: string; state: string }> {
+  return getManager().getAutomations();
 }
 
 // ─── Standalone state access ─────────────────────────────────

@@ -162,6 +162,12 @@ export class AutomationManager {
     data?: Record<string, any>
   ): Promise<any> {
     this.assertRunning(automation);
+    this.bridge.sendLog(
+      "debug",
+      automation.id,
+      `Calling service ${domain}.${service}`,
+      data
+    );
     return this.bridge.request("callService", { domain, service, data });
   }
 
@@ -221,7 +227,8 @@ export class AutomationManager {
   subscribeToStateChangeEvent(
     automation: AutomationInstance,
     entityId: string,
-    callback: (data: any) => void | Promise<void>
+    callback: (data: any) => void | Promise<void>,
+    emitAll: boolean = false
   ): () => void {
     this.assertRunning(automation);
 
@@ -231,6 +238,12 @@ export class AutomationManager {
 
     this.bridge.onStateChange(subId, (evEntityId, oldState, newState) => {
       if (automation.state !== "running") return;
+      // Default behavior: skip events without a new state or where state didn't change.
+      // Pass emitAll=true to receive every event (including attribute-only changes).
+      if (!emitAll) {
+        if (!newState) return;
+        if (oldState && newState.state === oldState.state) return;
+      }
       try {
         const result = callback({ entity_id: evEntityId, old_state: oldState, new_state: newState });
         if (result instanceof Promise) {
@@ -271,10 +284,11 @@ export class AutomationManager {
 
   onStateChange(
     automation: AutomationInstance,
-    callback: (data: any) => void | Promise<void>
+    callback: (data: any) => void | Promise<void>,
+    emitAll: boolean = false
   ): () => void {
     // Same as subscribeToStateChangeEvent but without entity filter
-    return this.subscribeToStateChangeEvent(automation, "", callback);
+    return this.subscribeToStateChangeEvent(automation, "", callback, emitAll);
   }
 
   async getEntityState(entityId: string): Promise<any> {
