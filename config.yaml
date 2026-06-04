@@ -25,7 +25,7 @@ options:
 schema:
   log_level: list(debug|info|warn|error)
   sync_path: str
-  ai_provider: list(none|github|openai|anthropic)
+  ai_provider: list(none|github|openai|anthropic|deepseek)
   ai_api_key: str
   ai_model: str
   ai_completion_model: str

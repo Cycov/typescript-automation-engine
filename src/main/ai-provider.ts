@@ -4,7 +4,7 @@
  */
 
 export interface AIConfig {
-  provider: "none" | "github" | "openai" | "anthropic";
+  provider: "none" | "github" | "openai" | "anthropic" | "deepseek";
   apiKey: string;
   model: string;
   completionModel: string;
@@ -37,6 +37,7 @@ interface StreamCallbacks {
 const PROVIDER_URLS: Record<string, string> = {
   github: "https://models.inference.ai.azure.com",
   openai: "https://api.openai.com/v1",
+  deepseek: "https://api.deepseek.com/v1",
 };
 
 export class AIProvider {
@@ -105,7 +106,12 @@ export class AIProvider {
     }
   }
 
-  // ─── OpenAI-compatible (GitHub Models, OpenAI) ─────
+  // ─── OpenAI-compatible (GitHub Models, OpenAI, DeepSeek) ─────
+
+  /** DeepSeek uses `max_tokens`; newer OpenAI uses `max_completion_tokens`. */
+  private tokenLimitParam(limit: number): Record<string, number> {
+    return this.config.provider === "deepseek" ? { max_tokens: limit } : { max_completion_tokens: limit };
+  }
 
   private async completeOpenAI(req: CompletionRequest): Promise<string> {
     const baseUrl = PROVIDER_URLS[this.config.provider] || PROVIDER_URLS.openai;
@@ -130,7 +136,7 @@ export class AIProvider {
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt },
           ],
-          max_completion_tokens: 256,
+          ...this.tokenLimitParam(256),
           stop: ["\n\n\n", "```"],
         }),
         signal: controller.signal,
@@ -173,7 +179,7 @@ export class AIProvider {
         body: JSON.stringify({
           model: this.config.model,
           messages,
-          max_completion_tokens: 4096,
+          ...this.tokenLimitParam(4096),
           stream: true,
         }),
         signal: controller.signal,

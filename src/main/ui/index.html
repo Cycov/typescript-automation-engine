@@ -1319,12 +1319,13 @@ supported_features: 40"></textarea>
           <option value="github">GitHub Models</option>
           <option value="openai">OpenAI</option>
           <option value="anthropic">Anthropic</option>
+          <option value="deepseek">DeepSeek</option>
         </select>
       </div>
       <div id="aiProviderHelp" class="ai-provider-help" style="display:none;"></div>
       <div style="margin-bottom: 12px;">
         <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;">API Key</label>
-        <input type="password" id="aiSettApiKey" style="width: 100%; background: var(--bg-input); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 4px; font-family: inherit; font-size: 12px; outline: none;" placeholder="GitHub PAT, OpenAI key, or Anthropic key" />
+        <input type="password" id="aiSettApiKey" style="width: 100%; background: var(--bg-input); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 4px; font-family: inherit; font-size: 12px; outline: none;" placeholder="GitHub PAT, OpenAI key, Anthropic key, or DeepSeek key" />
       </div>
       <div style="margin-bottom: 12px;">
         <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;">Chat Model</label>
@@ -4230,6 +4231,15 @@ supported_features: 40"></textarea>
           2. Click <em>Create Key</em> and copy it (starts with <code>sk-ant-...</code>).<br>
           3. Add credits to your workspace if needed.<br>
           <strong>Models:</strong> <code>claude-sonnet-4-20250514</code>, <code>claude-3-5-sonnet-latest</code>, <code>claude-3-5-haiku-latest</code>, <code>claude-3-opus-latest</code>.
+        `;
+      } else if (provider === 'deepseek') {
+        html = `
+          <strong>DeepSeek</strong> — low-cost API with OpenAI-compatible endpoint.<br>
+          1. Go to <a href="https://platform.deepseek.com/api-keys" target="_blank" rel="noopener">platform.deepseek.com/api-keys</a><br>
+          2. Click <em>Create API Key</em> and copy it (starts with <code>sk-...</code>).<br>
+          3. Add credits to your account if needed.<br>
+          <strong>Models:</strong> <code>deepseek-chat</code> (DeepSeek-V3), <code>deepseek-reasoner</code> (DeepSeek-R1).<br>
+          <em>Note:</em> <code>deepseek-reasoner</code> does not support streaming system prompts — use <code>deepseek-chat</code> for chat.
         `;
       } else {
         help.style.display = 'none';
