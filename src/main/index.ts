@@ -643,9 +643,9 @@ wss.on("connection", (ws) => {
                     ws.send(JSON.stringify({ type: "ai_chat_chunk", id: chatId, text }));
                   }
                 },
-                onDone: () => {
+                onDone: (usage) => {
                   if (ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({ type: "ai_chat_done", id: chatId }));
+                    ws.send(JSON.stringify({ type: "ai_chat_done", id: chatId, usage: usage ?? null }));
                   }
                 },
                 onError: (error: string) => {

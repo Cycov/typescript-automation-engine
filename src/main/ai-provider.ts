@@ -30,8 +30,15 @@ interface ChatRequest {
 
 interface StreamCallbacks {
   onChunk: (text: string) => void;
-  onDone: () => void;
+  onDone: (usage?: UsageInfo) => void;
   onError: (error: string) => void;
+}
+
+export interface UsageInfo {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  extra?: Record<string, number>;
 }
 
 const PROVIDER_URLS: Record<string, string> = {
@@ -181,6 +188,7 @@ export class AIProvider {
           messages,
           ...this.tokenLimitParam(4096),
           stream: true,
+          stream_options: { include_usage: true },
         }),
         signal: controller.signal,
       });
@@ -212,6 +220,7 @@ export class AIProvider {
 
     const decoder = new TextDecoder();
     let buffer = "";
+    let usage: UsageInfo | undefined;
 
     try {
       while (true) {
@@ -228,7 +237,7 @@ export class AIProvider {
 
           const data = trimmed.slice(6);
           if (data === "[DONE]") {
-            callbacks.onDone();
+            callbacks.onDone(usage);
             return;
           }
 
@@ -237,6 +246,22 @@ export class AIProvider {
             const content = parsed.choices?.[0]?.delta?.content;
             if (content) {
               callbacks.onChunk(content);
+            }
+            // Capture usage from the final chunk (stream_options: include_usage)
+            if (parsed.usage) {
+              const u = parsed.usage;
+              const extra: Record<string, number> = {};
+              for (const [k, v] of Object.entries(u)) {
+                if (k !== "prompt_tokens" && k !== "completion_tokens" && k !== "total_tokens" && typeof v === "number") {
+                  extra[k] = v;
+                }
+              }
+              usage = {
+                promptTokens: u.prompt_tokens ?? 0,
+                completionTokens: u.completion_tokens ?? 0,
+                totalTokens: u.total_tokens ?? 0,
+                extra: Object.keys(extra).length ? extra : undefined,
+              };
             }
           } catch {
             // Skip malformed SSE lines
@@ -247,7 +272,7 @@ export class AIProvider {
       reader.releaseLock();
     }
 
-    callbacks.onDone();
+    callbacks.onDone(usage);
   }
 
   // ─── Anthropic ─────────────────────────────────────
@@ -346,6 +371,7 @@ export class AIProvider {
 
     const decoder = new TextDecoder();
     let buffer = "";
+    let usage: UsageInfo | undefined;
 
     try {
       while (true) {
@@ -365,8 +391,26 @@ export class AIProvider {
             if (parsed.type === "content_block_delta" && parsed.delta?.text) {
               callbacks.onChunk(parsed.delta.text);
             }
+            // Anthropic sends usage in message_delta
+            if (parsed.type === "message_delta" && parsed.usage) {
+              const u = parsed.usage;
+              usage = {
+                promptTokens: usage?.promptTokens ?? 0,
+                completionTokens: u.output_tokens ?? 0,
+                totalTokens: (usage?.promptTokens ?? 0) + (u.output_tokens ?? 0),
+              };
+            }
+            // Anthropic sends input token count in message_start
+            if (parsed.type === "message_start" && parsed.message?.usage) {
+              const u = parsed.message.usage;
+              usage = {
+                promptTokens: u.input_tokens ?? 0,
+                completionTokens: usage?.completionTokens ?? 0,
+                totalTokens: (u.input_tokens ?? 0) + (usage?.completionTokens ?? 0),
+              };
+            }
             if (parsed.type === "message_stop") {
-              callbacks.onDone();
+              callbacks.onDone(usage);
               return;
             }
           } catch {
@@ -378,7 +422,7 @@ export class AIProvider {
       reader.releaseLock();
     }
 
-    callbacks.onDone();
+    callbacks.onDone(usage);
   }
 
   // ─── Prompt builders ───────────────────────────────

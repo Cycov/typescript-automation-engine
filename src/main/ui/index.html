@@ -933,6 +933,37 @@
     }
     .ai-msg-assistant pre:hover .ai-copy-btn { opacity: 1; }
     .ai-copy-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+    /* ─── Token usage badge ─────────────────────────── */
+    .ai-token-badge {
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-top: 4px;
+      padding: 0 2px;
+      display: inline-block;
+      position: relative;
+      cursor: default;
+      user-select: none;
+    }
+    .ai-token-badge:hover .ai-token-tooltip {
+      display: block;
+    }
+    .ai-token-tooltip {
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 4px);
+      left: 0;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 6px 10px;
+      font-size: 10px;
+      white-space: nowrap;
+      color: var(--text);
+      z-index: 50;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      line-height: 1.7;
+    }
     .ai-input-area {
       padding: 8px 12px;
       border-top: 1px solid var(--border);
@@ -992,6 +1023,84 @@
     }
     .ai-status-dot.configured { background: var(--green); }
     .ai-status-dot.unconfigured { background: var(--red); }
+
+    /* ─── AI history panel ──────────────────────────── */
+    .ai-history-panel {
+      background: var(--bg-tertiary);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      max-height: 240px;
+      overflow-y: auto;
+    }
+    .ai-history-empty {
+      padding: 12px;
+      color: var(--text-dim);
+      font-size: 11px;
+      text-align: center;
+      font-style: italic;
+    }
+    .ai-history-item {
+      display: flex;
+      align-items: center;
+      padding: 7px 12px;
+      gap: 8px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+    }
+    .ai-history-item:hover { background: var(--bg-input); }
+    .ai-history-item:last-child { border-bottom: none; }
+    .ai-history-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+    .ai-history-meta { color: var(--text-dim); font-size: 10px; flex-shrink: 0; }
+
+    /* ─── AI context details block ──────────────────── */
+    .ai-context-details {
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      margin-bottom: 10px;
+      font-size: 11px;
+      background: var(--bg-tertiary);
+    }
+    .ai-context-details summary {
+      cursor: pointer;
+      padding: 5px 10px;
+      color: var(--text-dim);
+      user-select: none;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .ai-context-details summary::-webkit-details-marker { display: none; }
+    .ai-context-details summary::before {
+      content: '▸';
+      font-size: 8px;
+      transition: transform 0.15s;
+      flex-shrink: 0;
+    }
+    .ai-context-details[open] summary::before { transform: rotate(90deg); }
+    .ai-context-body {
+      border-top: 1px solid var(--border);
+      padding: 8px 10px;
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 10px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text-dim);
+      max-height: 200px;
+      overflow-y: auto;
+      line-height: 1.4;
+    }
+    .ai-context-empty {
+      border-top: 1px solid var(--border);
+      padding: 6px 10px;
+      color: var(--text-dim);
+      font-style: italic;
+      font-size: 10px;
+    }
   </style>
 </head>
 <body>
@@ -1121,9 +1230,11 @@
         <h2>🤖 AI Chat</h2>
         <span class="ai-context-label"><span class="ai-status-dot" id="aiStatusDot"></span> <span id="aiStatusLabel">Not configured</span></span>
         <button class="btn" onclick="showAiSettingsDialog()" title="AI Settings">⚙</button>
-        <button class="btn" onclick="clearAiChat()" title="New chat">+</button>
+        <button class="btn" onclick="toggleAiHistory()" id="aiHistoryBtn" title="Past chats">History</button>
+        <button class="btn" onclick="clearAiChat()" title="New chat">New chat</button>
         <button class="btn" onclick="toggleAiChat()" title="Close">✕</button>
       </div>
+      <div class="ai-history-panel" id="aiHistoryPanel" style="display:none;"></div>
       <div class="ai-messages" id="aiMessages">
         <details class="ai-panel-section" id="aiWorkPanel">
           <summary>Work with AI — Export Context</summary>
@@ -1144,9 +1255,7 @@
             </div>
           </div>
         </details>
-        <div class="ai-msg ai-msg-assistant" style="color: var(--text-dim); font-size: 11px;">
-          Ask questions about your automations, get help writing TAE code, or describe what you want to automate.
-        </div>
+        <div id="aiConversation"></div>
       </div>
       <div class="ai-input-area">
         <div class="ai-context-label" id="aiContextInfo">Context: current file</div>
@@ -1367,6 +1476,7 @@ supported_features: 40"></textarea>
     let storageRefreshTimer = null;
     let aiChatOpen = false;
     let aiChatMessages = []; // { role: 'user'|'assistant', content: string }
+    let aiSessionHistory = []; // { title, messages, timestamp } — last 10 sessions
     let aiStreaming = false;
     let aiStreamingContent = '';
     let aiConfig = { provider: 'none', model: '', completionModel: '', configured: false };
@@ -1536,7 +1646,7 @@ supported_features: 40"></textarea>
           updateAiStreamingMessage();
           break;
         case 'ai_chat_done':
-          finalizeAiStreaming();
+          finalizeAiStreaming(msg.usage || null);
           break;
         case 'ai_chat_error':
           handleAiChatError(msg.error || 'Unknown error');
@@ -3965,6 +4075,7 @@ supported_features: 40"></textarea>
       document.getElementById('aiChatBtn').classList.toggle('btn-accent', aiChatOpen);
       if (aiChatOpen) {
         updateAiContextInfo();
+        if (aiChatMessages.length === 0) clearAiChat();
         setTimeout(() => document.getElementById('aiInput').focus(), 250);
       }
     }
@@ -3992,11 +4103,113 @@ supported_features: 40"></textarea>
     }
 
     function clearAiChat() {
+      // Save current session to history before clearing (if non-empty)
+      if (aiChatMessages.length > 0) {
+        const firstUser = aiChatMessages.find(m => m.role === 'user');
+        const title = firstUser ? firstUser.content.slice(0, 60) : 'Chat';
+        aiSessionHistory.unshift({ title, messages: aiChatMessages.slice(), timestamp: Date.now() });
+        if (aiSessionHistory.length > 10) aiSessionHistory.length = 10;
+      }
+
       aiChatMessages = [];
       aiStreaming = false;
       aiStreamingContent = '';
-      const container = document.getElementById('aiMessages');
-      container.innerHTML = '<div class="ai-msg ai-msg-assistant" style="color: var(--text-dim); font-size: 11px;">Ask questions about your automations, get help writing TAE code, or describe what you want to automate.</div>';
+
+      const conv = document.getElementById('aiConversation');
+      const ctx = buildAiSystemContext();
+      let bodyHtml;
+      if (ctx) {
+        const preview = ctx.length > 2000 ? ctx.slice(0, 2000) + '\n… (' + (ctx.length - 2000) + ' chars)' : ctx;
+        bodyHtml = '<div class="ai-context-body">' + escapeHtml(preview) + '</div>';
+      } else {
+        bodyHtml = '<div class="ai-context-empty">No context — open a file or load entities to give the AI more information.</div>';
+      }
+      conv.innerHTML =
+        '<details class="ai-context-details"><summary>System context · rebuilt each message</summary>' + bodyHtml + '</details>' +
+        '<div class="ai-msg ai-msg-assistant" style="color: var(--text-dim); font-size: 11px;">Ask questions about your automations, get help writing TAE code, or describe what you want to automate.</div>';
+
+      // Close history panel if open
+      document.getElementById('aiHistoryPanel').style.display = 'none';
+      const hBtn = document.getElementById('aiHistoryBtn');
+      if (hBtn) hBtn.classList.remove('btn-accent');
+    }
+
+    function toggleAiHistory() {
+      const panel = document.getElementById('aiHistoryPanel');
+      const btn = document.getElementById('aiHistoryBtn');
+      const isOpen = panel.style.display !== 'none';
+      if (isOpen) {
+        panel.style.display = 'none';
+        btn.classList.remove('btn-accent');
+      } else {
+        renderAiHistoryPanel();
+        panel.style.display = 'block';
+        btn.classList.add('btn-accent');
+      }
+    }
+
+    function renderAiHistoryPanel() {
+      const panel = document.getElementById('aiHistoryPanel');
+      if (aiSessionHistory.length === 0) {
+        panel.innerHTML = '<div class="ai-history-empty">No previous chats yet</div>';
+        return;
+      }
+      panel.innerHTML = aiSessionHistory.map((s, i) => {
+        const ago = formatAiHistoryAge(s.timestamp);
+        const count = s.messages.length;
+        return '<div class="ai-history-item" onclick="restoreAiSession(' + i + ')">' +
+          '<span class="ai-history-title">' + escapeHtml(s.title) + (s.title.length >= 60 ? '…' : '') + '</span>' +
+          '<span class="ai-history-meta">' + count + ' msg · ' + ago + '</span>' +
+          '</div>';
+      }).join('');
+    }
+
+    function formatAiHistoryAge(ts) {
+      const diff = Math.floor((Date.now() - ts) / 1000);
+      if (diff < 60) return 'just now';
+      if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+      if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+      return Math.floor(diff / 86400) + 'd ago';
+    }
+
+    function restoreAiSession(idx) {
+      const session = aiSessionHistory[idx];
+      if (!session) return;
+
+      // Save current session if non-empty before replacing
+      if (aiChatMessages.length > 0) {
+        const firstUser = aiChatMessages.find(m => m.role === 'user');
+        const title = firstUser ? firstUser.content.slice(0, 60) : 'Chat';
+        aiSessionHistory.splice(0, 0, { title, messages: aiChatMessages.slice(), timestamp: Date.now() });
+        // The session we're restoring is now at idx+1
+        aiSessionHistory.splice(idx + 1, 1);
+      } else {
+        aiSessionHistory.splice(idx, 1);
+      }
+      if (aiSessionHistory.length > 10) aiSessionHistory.length = 10;
+
+      aiChatMessages = session.messages.slice();
+      aiStreaming = false;
+      aiStreamingContent = '';
+
+      // Re-render conversation area
+      const conv = document.getElementById('aiConversation');
+      const ctx = buildAiSystemContext();
+      let bodyHtml;
+      if (ctx) {
+        const preview = ctx.length > 2000 ? ctx.slice(0, 2000) + '\n… (' + (ctx.length - 2000) + ' chars)' : ctx;
+        bodyHtml = '<div class="ai-context-body">' + escapeHtml(preview) + '</div>';
+      } else {
+        bodyHtml = '<div class="ai-context-empty">No context — open a file or load entities to give the AI more information.</div>';
+      }
+      conv.innerHTML = '<details class="ai-context-details"><summary>System context · rebuilt each message</summary>' + bodyHtml + '</details>';
+      for (const msg of aiChatMessages) {
+        appendAiMessage(msg.role, msg.content);
+      }
+
+      // Close history panel
+      document.getElementById('aiHistoryPanel').style.display = 'none';
+      document.getElementById('aiHistoryBtn').classList.remove('btn-accent');
     }
 
     function handleAiInputKey(e) {
@@ -4037,7 +4250,7 @@ supported_features: 40"></textarea>
       aiStreamingContent = '';
       document.getElementById('aiSendBtn').disabled = true;
       document.getElementById('aiSendBtn').textContent = 'Stop';
-      document.getElementById('aiSendBtn').onclick = () => { send({ type: 'ai_cancel' }); finalizeAiStreaming(); };
+      document.getElementById('aiSendBtn').onclick = () => { send({ type: 'ai_cancel' }); finalizeAiStreaming(null); };
 
       // Show thinking indicator
       appendAiThinking();
@@ -4074,29 +4287,47 @@ supported_features: 40"></textarea>
       return context;
     }
 
-    function appendAiMessage(role, content) {
-      const container = document.getElementById('aiMessages');
+    function appendAiMessage(role, content, usage) {
+      const conv = document.getElementById('aiConversation');
+      const scrollEl = document.getElementById('aiMessages');
       const div = document.createElement('div');
       div.className = 'ai-msg';
 
       if (role === 'user') {
         div.innerHTML = '<div class="ai-msg-label">You</div><div class="ai-msg-user">' + escapeHtml(content) + '</div>';
       } else {
-        div.innerHTML = '<div class="ai-msg-label">AI</div><div class="ai-msg-assistant">' + renderAiMarkdown(content) + '</div>';
+        let usageHtml = '';
+        if (usage) {
+          const { promptTokens, completionTokens, totalTokens, extra } = usage;
+          let tooltipLines = [
+            'Prompt tokens: ' + promptTokens,
+            'Completion tokens: ' + completionTokens,
+            'Total tokens: ' + totalTokens,
+          ];
+          if (extra) {
+            for (const [k, v] of Object.entries(extra)) {
+              tooltipLines.push(k.replace(/_/g, ' ') + ': ' + v);
+            }
+          }
+          usageHtml = '<div class="ai-token-badge">↑' + promptTokens + ' ↓' + completionTokens +
+            '<div class="ai-token-tooltip">' + tooltipLines.map(escapeHtml).join('<br>') + '</div></div>';
+        }
+        div.innerHTML = '<div class="ai-msg-label">AI</div><div class="ai-msg-assistant">' + renderAiMarkdown(content) + '</div>' + usageHtml;
       }
 
-      container.appendChild(div);
-      container.scrollTop = container.scrollHeight;
+      conv.appendChild(div);
+      scrollEl.scrollTop = scrollEl.scrollHeight;
     }
 
     function appendAiThinking() {
-      const container = document.getElementById('aiMessages');
+      const conv = document.getElementById('aiConversation');
+      const scrollEl = document.getElementById('aiMessages');
       const div = document.createElement('div');
       div.className = 'ai-msg';
       div.id = 'aiThinking';
       div.innerHTML = '<div class="ai-msg-label">AI</div><div class="ai-msg-thinking">Thinking</div>';
-      container.appendChild(div);
-      container.scrollTop = container.scrollHeight;
+      conv.appendChild(div);
+      scrollEl.scrollTop = scrollEl.scrollHeight;
     }
 
     function updateAiStreamingMessage() {
@@ -4109,7 +4340,7 @@ supported_features: 40"></textarea>
       }
     }
 
-    function finalizeAiStreaming() {
+    function finalizeAiStreaming(usage) {
       if (!aiStreaming) return;
       aiStreaming = false;
 
@@ -4119,7 +4350,7 @@ supported_features: 40"></textarea>
 
       if (aiStreamingContent.trim()) {
         aiChatMessages.push({ role: 'assistant', content: aiStreamingContent });
-        appendAiMessage('assistant', aiStreamingContent);
+        appendAiMessage('assistant', aiStreamingContent, usage);
       }
 
       aiStreamingContent = '';
@@ -4133,12 +4364,13 @@ supported_features: 40"></textarea>
       const thinking = document.getElementById('aiThinking');
       if (thinking) thinking.remove();
 
-      const container = document.getElementById('aiMessages');
+      const conv = document.getElementById('aiConversation');
+      const scrollEl = document.getElementById('aiMessages');
       const div = document.createElement('div');
       div.className = 'ai-msg';
       div.innerHTML = '<div class="ai-msg-error">' + escapeHtml(error) + '</div>';
-      container.appendChild(div);
-      container.scrollTop = container.scrollHeight;
+      conv.appendChild(div);
+      scrollEl.scrollTop = scrollEl.scrollHeight;
 
       document.getElementById('aiSendBtn').disabled = false;
       document.getElementById('aiSendBtn').textContent = 'Send';
