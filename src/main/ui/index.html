@@ -917,6 +917,54 @@
       40% { content: '..'; }
       60%, 100% { content: '...'; }
     }
+    .ai-thinking-details {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-tertiary);
+      overflow: hidden;
+    }
+    .ai-thinking-details summary {
+      cursor: pointer;
+      padding: 5px 10px;
+      font-size: 11px;
+      color: var(--text-dim);
+      font-style: italic;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      user-select: none;
+    }
+    .ai-thinking-details summary::-webkit-details-marker { display: none; }
+    .ai-thinking-details summary::before {
+      content: '▸';
+      font-style: normal;
+      transition: transform 0.15s;
+    }
+    .ai-thinking-details[open] summary::before { transform: rotate(90deg); }
+    .ai-thinking-body {
+      padding: 8px 10px;
+      border-top: 1px solid var(--border);
+    }
+    .ai-thinking-section { margin-bottom: 8px; }
+    .ai-thinking-section strong {
+      display: block;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+    }
+    .ai-thinking-pre {
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 11px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: var(--text);
+      margin: 0;
+      max-height: 300px;
+      overflow-y: auto;
+    }
     .ai-copy-btn {
       position: absolute;
       top: 4px;
@@ -1487,6 +1535,11 @@ supported_features: 40"></textarea>
     let serverSyncPath = '/share/tae';
     let automationClassMap = new Map(); // automationId -> { file, line, className }
     let expandedFolders = new Set();    // persisted across renders (paths)
+    let cachedAllEntityStates = [];     // full HAEntityState[] from last all_entities response
+    let cachedDeviceRegistry = null;    // { devices: [], entityRegistry: [], areas: [] } from HA registries
+    let aiAgentPassState = 0;           // 0=normal, 1=waiting for pass-1 entity probe, 2=in pass-2
+    let aiAgentUserMessages = [];       // preserved full conversation for pass-2 re-send
+    let aiAgentSystemContext = '';      // preserved base system context for pass-2 enrichment
     const isTabletSize = () => window.matchMedia('(max-width: 900px), (pointer: coarse)').matches;
 
     // ─── WebSocket ──────────────────────────────────
@@ -1503,6 +1556,7 @@ supported_features: 40"></textarea>
         ws.send(JSON.stringify({ type: 'get_logs', count: 1000 }));
         ws.send(JSON.stringify({ type: 'get_files' }));
         ws.send(JSON.stringify({ type: 'get_all_entities' }));
+        ws.send(JSON.stringify({ type: 'get_device_registry' }));
         ws.send(JSON.stringify({ type: 'get_storage' }));
         ws.send(JSON.stringify({ type: 'ai_get_config' }));
         startStoragePolling();
@@ -1601,8 +1655,10 @@ supported_features: 40"></textarea>
           if (msg.action === 'import') refreshFiles();
           break;
         case 'all_entities':
+          // Cache full state objects for entity context resolution
+          cachedAllEntityStates = msg.data || [];
           // Cache for terminal autocomplete
-          cachedEntityIds = (msg.data || []).map(e => ({
+          cachedEntityIds = cachedAllEntityStates.map(e => ({
             id: e.entity_id,
             name: e.attributes?.friendly_name || '',
           }));
@@ -1611,6 +1667,9 @@ supported_features: 40"></textarea>
             pendingEntitiesDownload = false;
             handleEntitiesDownload(msg.data || []);
           }
+          break;
+        case 'device_registry':
+          cachedDeviceRegistry = msg.data || null;
           break;
         case 'skill_file':
           aiSkillMdCache = msg.data || null;
@@ -4236,6 +4295,44 @@ supported_features: 40"></textarea>
         return;
       }
 
+      // ─── /fetch command — test context resolution without calling AI ───
+      if (text.startsWith('/fetch ')) {
+        const jsonStr = text.slice(7).trim();
+        try {
+          const parsed = JSON.parse(jsonStr);
+          if (parsed.needs_entities || parsed.needs_area || parsed.needs_skill) {
+            input.value = '';
+            autoResizeAiInput();
+            appendAiMessage('user', text);
+            if (cachedAllEntityStates.length === 0) {
+              appendAiThinkingBlockMulti(JSON.stringify(parsed, null, 2), [{ label: 'Status', text: 'Loading entities — please wait then retry.' }]);
+              send({ type: 'get_all_entities' });
+              if (!cachedDeviceRegistry) send({ type: 'get_device_registry' });
+              return;
+            }
+            if (!cachedDeviceRegistry) send({ type: 'get_device_registry' });
+            const sections = [];
+            if (parsed.needs_entities && Array.isArray(parsed.needs_entities)) {
+              const ctx = resolveEntityContext(parsed.needs_entities);
+              sections.push({ label: 'Resolved entities', text: ctx || '(no matching entities found)' });
+            }
+            if (parsed.needs_area) {
+              const ctx = resolveAreaContext(parsed.needs_area);
+              sections.push({ label: 'Area entities', text: ctx || '(area not found or empty)' });
+            }
+            if (parsed.needs_skill) {
+              const sk = aiSkillMdCache || '(SKILL.md not loaded yet)';
+              sections.push({ label: 'TAE reference', text: sk.slice(0, 300) + (sk.length > 300 ? '\n… (' + sk.length + ' chars)' : '') });
+            }
+            appendAiThinkingBlockMulti(JSON.stringify(parsed, null, 2), sections);
+            return;
+          }
+        } catch {}
+      }
+
+      // Ensure device registry is loaded for agentic resolution
+      if (!cachedDeviceRegistry) send({ type: 'get_device_registry' });
+
       // Add user message
       aiChatMessages.push({ role: 'user', content: text });
       appendAiMessage('user', text);
@@ -4243,14 +4340,18 @@ supported_features: 40"></textarea>
       autoResizeAiInput();
 
       // Build system context
-      let systemContext = buildAiSystemContext();
+      const baseSystemContext = buildAiSystemContext();
 
-      // Start streaming
+      // Start streaming — pass 1 (agent entity probe)
       aiStreaming = true;
       aiStreamingContent = '';
+      aiAgentPassState = 1;
+      aiAgentUserMessages = aiChatMessages.map(m => ({ role: m.role, content: m.content }));
+      aiAgentSystemContext = baseSystemContext;
+
       document.getElementById('aiSendBtn').disabled = true;
       document.getElementById('aiSendBtn').textContent = 'Stop';
-      document.getElementById('aiSendBtn').onclick = () => { send({ type: 'ai_cancel' }); finalizeAiStreaming(null); };
+      document.getElementById('aiSendBtn').onclick = () => { send({ type: 'ai_cancel' }); aiAgentPassState = 0; finalizeAiStreaming(null); };
 
       // Show thinking indicator
       appendAiThinking();
@@ -4258,9 +4359,34 @@ supported_features: 40"></textarea>
       send({
         type: 'ai_chat',
         id: Date.now(),
-        messages: aiChatMessages.map(m => ({ role: m.role, content: m.content })),
-        systemContext,
+        messages: aiAgentUserMessages,
+        systemContext: buildAgentSystemContext(baseSystemContext),
       });
+    }
+
+    function buildAgentSystemContext(baseContext) {
+      return `CONTEXT RESOLUTION PROTOCOL:
+If you need more information to answer the user's question, respond ONLY with a JSON object (nothing else) using one or more of these keys:
+
+  {"needs_entities": ["keyword1", "keyword2"]}
+    → Fetches devices/entities matching keywords (name, entity_id, domain, area name).
+      All sibling entities on matched devices are included automatically.
+      Examples: ["vacuum","roborock"], ["living room","light"], ["s7"]
+
+  {"needs_area": "area name or id"}
+    → Fetches all devices and entities assigned to a specific area.
+      Use the exact area name or area_id from the areas list below.
+      Example: {"needs_area": "living_room"}
+
+  {"needs_skill": true}
+    → Fetches the full TAE API reference (use when writing non-trivial automation code).
+
+You may combine keys in one object, e.g.:
+  {"needs_entities": ["vacuum"], "needs_skill": true}
+
+If all necessary context is already provided below, answer directly.
+
+` + baseContext;
     }
 
     function buildAiSystemContext() {
@@ -4273,16 +4399,17 @@ supported_features: 40"></textarea>
         context += `Currently open file (${activeTab}):\n\`\`\`typescript\n${content.slice(0, 8000)}\n\`\`\`\n\n`;
       }
 
-      // Entity summary
-      if (cachedEntityIds && cachedEntityIds.length > 0) {
-        const summary = cachedEntityIds.slice(0, 100).map(e => `${e.id} (${e.name})`).join(', ');
-        context += `Available HA entities (first 100): ${summary}\n\n`;
+      // Areas — always inject: small, gives AI the home layout + IDs for area queries
+      if (cachedDeviceRegistry && cachedDeviceRegistry.areas && cachedDeviceRegistry.areas.length > 0) {
+        const areaLines = cachedDeviceRegistry.areas
+          .filter(a => a.name)
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map(a => `  ${a.name} (id: ${a.area_id})`)
+          .join('\n');
+        context += `Home areas:\n${areaLines}\n\n`;
       }
 
-      // SKILL.md cache
-      if (aiSkillMdCache) {
-        context += `TAE Reference:\n${aiSkillMdCache.slice(0, 6000)}\n`;
-      }
+      // SKILL.md is NOT injected here — fetched on demand via needs_skill probe
 
       return context;
     }
@@ -4330,6 +4457,253 @@ supported_features: 40"></textarea>
       scrollEl.scrollTop = scrollEl.scrollHeight;
     }
 
+    function appendAiThinkingBlock(query, result) {
+      const conv = document.getElementById('aiConversation');
+      const scrollEl = document.getElementById('aiMessages');
+      const div = document.createElement('div');
+      div.className = 'ai-msg';
+      div.innerHTML =
+        '<div class="ai-msg-label">AI</div>' +
+        '<details class="ai-thinking-details">' +
+          '<summary>Thinking</summary>' +
+          '<div class="ai-thinking-body">' +
+            '<div class="ai-thinking-section">' +
+              '<strong>Entity query</strong>' +
+              '<pre class="ai-thinking-pre">' + escapeHtml(query) + '</pre>' +
+            '</div>' +
+            (result
+              ? '<div class="ai-thinking-section">' +
+                  '<strong>Resolved context</strong>' +
+                  '<pre class="ai-thinking-pre">' + escapeHtml(result) + '</pre>' +
+                '</div>'
+              : '') +
+          '</div>' +
+        '</details>';
+      conv.appendChild(div);
+      scrollEl.scrollTop = scrollEl.scrollHeight;
+    }
+
+    // ─── Entity context resolution ───────────────────────────────────
+
+    // Supported-features bitmask decoders per domain
+    const FEATURE_FLAGS = {
+      vacuum: { 1:'start', 2:'stop', 4:'pause', 8:'return_home', 16:'battery',
+                64:'send_command', 128:'locate', 256:'clean_spot', 2048:'fan_speed' },
+      cover:  { 1:'open', 2:'close', 4:'set_position', 8:'stop',
+                16:'tilt_open', 32:'tilt_close', 64:'set_tilt_position' },
+      climate:{ 1:'target_temperature', 2:'target_temperature_range', 4:'target_humidity',
+                8:'fan_mode', 16:'preset_mode', 32:'swing_mode', 64:'aux_heat' },
+      media_player: {
+        1:'pause', 2:'seek', 4:'volume_set', 8:'volume_mute',
+        16:'previous_track', 32:'next_track', 64:'turn_on', 128:'turn_off',
+        256:'play_media', 512:'volume_step', 1024:'select_source',
+        2048:'stop', 4096:'clear_playlist', 8192:'play',
+        16384:'shuffle_set', 32768:'select_sound_mode',
+      },
+      fan:    { 1:'set_speed', 8:'oscillate', 16:'direction', 64:'preset_mode' },
+      lock:   { 1:'open', 8:'unlocklatch' },
+      alarm_control_panel: { 1:'arm_home', 2:'arm_away', 4:'arm_night',
+                              8:'trigger', 16:'arm_custom_bypass', 32:'arm_vacation' },
+    };
+
+    function getEntityServices(entity) {
+      const domain = entity.entity_id.split('.')[0];
+      const supported = entity.attributes?.supported_features || 0;
+      const flags = FEATURE_FLAGS[domain];
+      if (flags && supported) {
+        const features = [];
+        for (const [bit, name] of Object.entries(flags)) {
+          if (supported & parseInt(bit)) features.push(name);
+        }
+        if (features.length > 0) return features;
+      }
+      return SERVICE_MAP[domain] || [];
+    }
+
+    function formatEntityForContext(entity) {
+      const state = entity.state || '';
+      const name = entity.attributes?.friendly_name || '';
+      const attrs = entity.attributes || {};
+      let line = '  ' + entity.entity_id;
+      if (name && name !== entity.entity_id) line += ' (' + name + ')';
+      line += '  state: ' + state;
+      if (attrs.unit_of_measurement) line += ' ' + attrs.unit_of_measurement;
+      const services = getEntityServices(entity);
+      if (services.length > 0) line += '  services: ' + services.join(', ');
+      return line;
+    }
+
+    function resolveEntityContext(keywords) {
+      const kws = keywords.map(k => k.toLowerCase().trim()).filter(Boolean);
+      if (!kws.length || !cachedAllEntityStates.length) return '';
+
+      const stateMap = new Map(cachedAllEntityStates.map(e => [e.entity_id, e]));
+
+      function scoreEntity(e) {
+        const id = e.entity_id.toLowerCase();
+        const name = (e.attributes?.friendly_name || '').toLowerCase();
+        return kws.reduce((s, kw) => s + (id.includes(kw) || name.includes(kw) ? 1 : 0), 0);
+      }
+
+      // ── With device registry: group by device and include siblings ──
+      if (cachedDeviceRegistry && cachedDeviceRegistry.entityRegistry) {
+        const { devices, entityRegistry, areas } = cachedDeviceRegistry;
+        const areaMap = new Map((areas || []).map(a => [a.area_id, a.name]));
+
+        const matchedDeviceIds = new Set();
+
+        // Score entities; collect their device IDs
+        for (const e of cachedAllEntityStates) {
+          if (scoreEntity(e) > 0) {
+            const reg = entityRegistry.find(r => r.entity_id === e.entity_id);
+            if (reg && reg.device_id) matchedDeviceIds.add(reg.device_id);
+          }
+        }
+
+        // Score device names/models/areas directly
+        for (const dev of devices) {
+          const areaName = (dev.area_id ? areaMap.get(dev.area_id) : '') || '';
+          const devStr = [
+            dev.name_by_user, dev.name, dev.model, dev.manufacturer, areaName,
+          ].filter(Boolean).join(' ').toLowerCase();
+          if (kws.some(kw => devStr.includes(kw))) matchedDeviceIds.add(dev.id);
+        }
+
+        // Score areas directly — if a keyword matches an area name, include all devices in it
+        for (const area of (areas || [])) {
+          if (kws.some(kw => area.name.toLowerCase().includes(kw))) {
+            for (const dev of devices) {
+              if (dev.area_id === area.area_id) matchedDeviceIds.add(dev.id);
+            }
+            // Also include entities directly assigned to the area
+            for (const reg of entityRegistry) {
+              if (reg.area_id === area.area_id && !reg.device_id) {
+                // Mark as orphan-area match below
+                reg._areaMatch = true;
+              }
+            }
+          }
+        }
+
+        if (matchedDeviceIds.size === 0) return resolveEntityContextFallback(kws);
+
+        let result = '';
+        for (const devId of matchedDeviceIds) {
+          const dev = devices.find(d => d.id === devId);
+          const areaName = dev?.area_id ? areaMap.get(dev.area_id) : null;
+          const label = [dev?.name_by_user || dev?.name, dev?.manufacturer, dev?.model]
+            .filter(Boolean).join(' — ');
+          result += 'Device: ' + (label || devId);
+          if (areaName) result += '  [' + areaName + ']';
+          result += '\n';
+
+          const devEntityIds = entityRegistry
+            .filter(r => r.device_id === devId)
+            .map(r => r.entity_id);
+
+          for (const eid of devEntityIds) {
+            const e = stateMap.get(eid);
+            if (e) result += formatEntityForContext(e) + '\n';
+            else result += '  ' + eid + '  (state unknown)\n';
+          }
+          result += '\n';
+        }
+
+        // Include matched entities with no device
+        for (const e of cachedAllEntityStates) {
+          if (scoreEntity(e) > 0) {
+            const reg = entityRegistry.find(r => r.entity_id === e.entity_id);
+            if (!reg || !reg.device_id) result += formatEntityForContext(e) + '\n';
+          }
+        }
+        // Include area-matched entities with no device
+        for (const reg of entityRegistry) {
+          if (reg._areaMatch) {
+            reg._areaMatch = false;
+            if (!matchedDeviceIds.has(reg.device_id)) {
+              const e = stateMap.get(reg.entity_id);
+              if (e) result += formatEntityForContext(e) + '\n';
+            }
+          }
+        }
+
+        return result.trim();
+      }
+
+      // ── Fallback: no device registry ──────────────────────────────────
+      return resolveEntityContextFallback(kws);
+    }
+
+    function resolveEntityContextFallback(kws) {
+      return cachedAllEntityStates
+        .filter(e => {
+          const id = e.entity_id.toLowerCase();
+          const name = (e.attributes?.friendly_name || '').toLowerCase();
+          return kws.some(kw => id.includes(kw) || name.includes(kw));
+        })
+        .map(formatEntityForContext)
+        .join('\n');
+    }
+
+    function resolveAreaContext(areaQuery) {
+      if (!cachedDeviceRegistry || !cachedDeviceRegistry.areas) return '';
+      const { devices, entityRegistry, areas } = cachedDeviceRegistry;
+      const q = String(areaQuery).toLowerCase().trim();
+
+      // Match by area_id or name (case-insensitive)
+      const area = areas.find(a =>
+        (a.area_id && a.area_id.toLowerCase() === q) ||
+        (a.name && a.name.toLowerCase() === q)
+      );
+      if (!area) return '';
+
+      const stateMap = new Map(cachedAllEntityStates.map(e => [e.entity_id, e]));
+      let result = `Area: ${area.name} (id: ${area.area_id})\n\n`;
+
+      // Devices in this area
+      const areaDevices = devices.filter(d => d.area_id === area.area_id);
+      for (const dev of areaDevices) {
+        const label = [dev.name_by_user || dev.name, dev.manufacturer, dev.model].filter(Boolean).join(' — ');
+        result += 'Device: ' + label + '\n';
+        const devEntityIds = entityRegistry.filter(r => r.device_id === dev.id).map(r => r.entity_id);
+        for (const eid of devEntityIds) {
+          const e = stateMap.get(eid);
+          if (e) result += formatEntityForContext(e) + '\n';
+          else result += '  ' + eid + '  (state unknown)\n';
+        }
+        result += '\n';
+      }
+
+      // Entities directly assigned to the area (no device)
+      const areaEntities = entityRegistry.filter(r => r.area_id === area.area_id && !r.device_id);
+      for (const reg of areaEntities) {
+        const e = stateMap.get(reg.entity_id);
+        if (e) result += formatEntityForContext(e) + '\n';
+      }
+
+      return result.trim();
+    }
+
+    // Multi-section thinking block (probe query + N result sections)
+    function appendAiThinkingBlockMulti(query, sections) {
+      const conv = document.getElementById('aiConversation');
+      const scrollEl = document.getElementById('aiMessages');
+      const div = document.createElement('div');
+      div.className = 'ai-msg';
+      let bodyHtml = '<div class="ai-thinking-section"><strong>Probe</strong><pre class="ai-thinking-pre">' + escapeHtml(query) + '</pre></div>';
+      for (const sec of sections) {
+        bodyHtml += '<div class="ai-thinking-section"><strong>' + escapeHtml(sec.label) + '</strong><pre class="ai-thinking-pre">' + escapeHtml(sec.text) + '</pre></div>';
+      }
+      div.innerHTML =
+        '<div class="ai-msg-label">AI</div>' +
+        '<details class="ai-thinking-details">' +
+          '<summary>Thinking</summary>' +
+          '<div class="ai-thinking-body">' + bodyHtml + '</div>' +
+        '</details>';
+      conv.appendChild(div);
+      scrollEl.scrollTop = scrollEl.scrollHeight;
+    }
+
     function updateAiStreamingMessage() {
       // Replace thinking indicator with streaming content
       const thinking = document.getElementById('aiThinking');
@@ -4342,6 +4716,79 @@ supported_features: 40"></textarea>
 
     function finalizeAiStreaming(usage) {
       if (!aiStreaming) return;
+
+      // ─── Pass-1: check for context resolution probe ───────────────────
+      if (aiAgentPassState === 1) {
+        const trimmed = aiStreamingContent.trim();
+        let probe = null;
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed.needs_entities || parsed.needs_area || parsed.needs_skill) {
+            probe = parsed;
+          }
+        } catch {}
+
+        if (probe) {
+          aiStreaming = false;
+          const thinking = document.getElementById('aiThinking');
+          if (thinking) thinking.remove();
+
+          // Resolve all requested context
+          let entityContext = '';
+          let skillContext = '';
+          const sections = [];
+
+          if (probe.needs_entities && Array.isArray(probe.needs_entities)) {
+            entityContext = resolveEntityContext(probe.needs_entities);
+            sections.push({ label: 'Entity query', text: JSON.stringify({ needs_entities: probe.needs_entities }, null, 2) });
+            sections.push({ label: 'Resolved entities', text: entityContext || '(no matching entities found)' });
+          }
+
+          if (probe.needs_area) {
+            const areaCtx = resolveAreaContext(probe.needs_area);
+            entityContext += (entityContext ? '\n\n' : '') + areaCtx;
+            sections.push({ label: 'Area query', text: String(probe.needs_area) });
+            sections.push({ label: 'Area entities', text: areaCtx || '(area not found or empty)' });
+          }
+
+          if (probe.needs_skill) {
+            skillContext = aiSkillMdCache || '(TAE reference not yet loaded — try again shortly)';
+            sections.push({ label: 'TAE reference', text: skillContext.slice(0, 200) + (skillContext.length > 200 ? '\n… (' + skillContext.length + ' chars)' : '') });
+          }
+
+          appendAiThinkingBlockMulti(JSON.stringify(probe, null, 2), sections);
+
+          // Build pass-2 context with all resolved data
+          let pass2Context = aiAgentSystemContext;
+          if (entityContext) pass2Context += '\n\nResolved entity context:\n' + entityContext;
+          if (skillContext) pass2Context += '\n\nTAE API Reference:\n' + skillContext.slice(0, 6000);
+
+          aiAgentPassState = 2;
+          aiStreaming = true;
+          aiStreamingContent = '';
+
+          document.getElementById('aiSendBtn').disabled = true;
+          document.getElementById('aiSendBtn').textContent = 'Stop';
+          document.getElementById('aiSendBtn').onclick = () => { send({ type: 'ai_cancel' }); aiAgentPassState = 0; finalizeAiStreaming(null); };
+
+          appendAiThinking();
+
+          send({
+            type: 'ai_chat',
+            id: Date.now(),
+            messages: aiAgentUserMessages,
+            systemContext: pass2Context,
+          });
+          return;
+        }
+
+        // Pass 1 gave a direct answer — treat as normal
+        aiAgentPassState = 0;
+      } else if (aiAgentPassState === 2) {
+        aiAgentPassState = 0;
+      }
+
+      // ─── Normal finalization ─────────────────────────────────────────
       aiStreaming = false;
 
       // Remove thinking element and add final message
@@ -4361,6 +4808,7 @@ supported_features: 40"></textarea>
 
     function handleAiChatError(error) {
       aiStreaming = false;
+      aiAgentPassState = 0;
       const thinking = document.getElementById('aiThinking');
       if (thinking) thinking.remove();
 

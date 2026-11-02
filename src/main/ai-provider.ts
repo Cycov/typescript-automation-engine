@@ -1,6 +1,71 @@
 /**
  * AI Provider — Proxies requests to GitHub Models (OpenAI-compatible) or other LLM APIs.
  * Supports streaming for chat and non-streaming for inline completions.
+ *
+ * ─── Agentic Entity Resolution (Two-Pass Pattern) ─────────────────────────────
+ *
+ * The chat UI implements a lightweight agentic loop so the AI can request relevant
+ * Home Assistant entity/device context on demand rather than always injecting the
+ * entire entity list into the system prompt (which would be too large and expensive).
+ *
+ * HOW IT WORKS:
+ *
+ * Pass 1 — Context Probe
+ *   Every user message is sent to the AI with a protocol instruction prepended to the
+ *   system context (see buildAgentSystemContext() in index.html). The AI may respond
+ *   with a JSON probe object (and nothing else) using one or more of these keys:
+ *
+ *     {"needs_entities": ["keyword1", "keyword2"]}
+ *       Fuzzy-searches entities/devices by keyword → includes sibling entities on matched
+ *       devices, with supported_features decoded into service names.
+ *
+ *     {"needs_area": "area name or area_id"}
+ *       Fetches all devices + entities assigned to that area.
+ *
+ *     {"needs_skill": true}
+ *       Injects the full SKILL.md TAE API reference (~6000 chars).
+ *       Not injected automatically to save tokens on simple questions.
+ *
+ *   Keys may be combined: {"needs_entities": ["vacuum"], "needs_skill": true}
+ *
+ * Always-injected context (small, every message):
+ *   - Current open file content (up to 8000 chars)
+ *   - Home areas list with name + area_id (e.g. "Living Room (id: living_room)")
+ *
+ * On-demand context (probe only):
+ *   - Entity/device context with supported_features decoded
+ *   - Area-scoped entity listings
+ *   - SKILL.md TAE reference
+ *
+ * Pass 2 — Enriched Answer
+ *   The keywords are resolved via resolveEntityContext() (index.html):
+ *   - Fuzzy-searches cachedAllEntityStates by entity_id and friendly_name
+ *   - Uses cachedDeviceRegistry (HA device + entity registries) to find the matched
+ *     devices and automatically include ALL sibling entities on each device
+ *   - Decodes supported_features bitmasks (FEATURE_FLAGS map) into readable service names
+ *   The compact context block is injected into the system prompt and the original
+ *   user messages are re-sent. The AI now answers with full entity context.
+ *
+ * The pass-1 probe response is NEVER shown to the user — instead it appears as a
+ * collapsible "Thinking" block (appendAiThinkingBlock() in index.html) showing the
+ * JSON query and the resolved entity context.
+ *
+ * /fetch COMMAND (testing tool)
+ *   Users can test entity resolution without calling the AI by typing:
+ *     /fetch {"needs_entities":["vacuum","battery"]}
+ *   This runs resolveEntityContext() and shows the result in a Thinking block.
+ *
+ * BACKEND SUPPORT
+ *   - haClient.getDeviceRegistry() → config/device_registry/list
+ *   - haClient.getEntityRegistry() → config/entity_registry/list
+ *   - WS message "get_device_registry" → "device_registry" response with { devices, entityRegistry }
+ *   - Both registries are fetched once on WS connect and cached in cachedDeviceRegistry (UI).
+ *
+ * ADDING NEW AGENTIC FLOWS
+ *   Follow the same pattern: intercept finalizeAiStreaming() on a specific pass state,
+ *   show a Thinking block, build enriched context, re-send with pass state incremented.
+ *   Keep hidden passes invisible to the user and to aiChatMessages history.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 
 export interface AIConfig {

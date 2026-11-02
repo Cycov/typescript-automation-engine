@@ -526,6 +526,19 @@ wss.on("connection", (ws) => {
           }
           break;
 
+        case "get_device_registry":
+          try {
+            const [devices, entityRegistry, areas] = await Promise.all([
+              haClient.getDeviceRegistry(),
+              haClient.getEntityRegistry(),
+              haClient.getAreaRegistry(),
+            ]);
+            ws.send(JSON.stringify({ type: "device_registry", data: { devices, entityRegistry, areas } }));
+          } catch (e: any) {
+            ws.send(JSON.stringify({ type: "error", message: `Device registry error: ${e.message}` }));
+          }
+          break;
+
         case "get_storage":
           try {
             ws.send(JSON.stringify({

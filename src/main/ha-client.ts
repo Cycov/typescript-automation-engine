@@ -214,6 +214,18 @@ export class HAClient {
     return this.allStates.get(entityId);
   }
 
+  async getDeviceRegistry(): Promise<any[]> {
+    return this.sendCommand({ type: "config/device_registry/list" });
+  }
+
+  async getEntityRegistry(): Promise<any[]> {
+    return this.sendCommand({ type: "config/entity_registry/list" });
+  }
+
+  async getAreaRegistry(): Promise<any[]> {
+    return this.sendCommand({ type: "config/area_registry/list" });
+  }
+
   async callService(
     domain: string,
     service: string,
