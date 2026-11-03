@@ -981,6 +981,9 @@
     .ai-tool-card[open] summary::before { transform: rotate(90deg); }
     .ai-tool-card .ai-tool-status { flex-shrink: 0; width: 14px; text-align: center; }
     .ai-tool-card .ai-tool-title { color: var(--text); font-weight: 600; flex-shrink: 0; }
+    .ai-diff-stat { flex-shrink: 0; margin-left: auto; font-size: 10px; font-family: 'Cascadia Code', 'Fira Code', monospace; }
+    .ai-diff-stat .add { color: var(--green); }
+    .ai-diff-stat .del { color: var(--red); }
     .ai-tool-card .ai-tool-args {
       overflow: hidden;
       text-overflow: ellipsis;
@@ -5025,7 +5028,8 @@ supported_features: 40"></textarea>
           const status = element.classList.contains('ok') ? '✓' : element.classList.contains('failed') ? '✗' : element.classList.contains('declined') ? 'declined' : '…';
           const title = (element.querySelector('.ai-tool-title') || {}).textContent || 'Tool';
           const args = (element.querySelector('.ai-tool-args') || {}).textContent || '';
-          const lines = ['**Tool: ' + title + '**' + (args ? ' `' + args.replace(/`/g, "'") + '`' : '') + ' — ' + status + exportTime(element)];
+          const stat = element.querySelector('.ai-diff-stat');
+          const lines = ['**Tool: ' + title + '**' + (args ? ' `' + args.replace(/`/g, "'") + '`' : '') + (stat ? ' (' + stat.textContent + ' lines)' : '') + ' — ' + status + exportTime(element)];
           for (const section of element.querySelectorAll('.ai-tool-section')) {
             const heading = (section.querySelector('strong') || {}).textContent || '';
             const pre = section.querySelector('pre');
@@ -5182,9 +5186,39 @@ supported_features: 40"></textarea>
       return '<div class="ai-diff">' + lines.join('') + '</div>';
     }
 
+    /** "+3 −1" for a unified diff. */
+    function diffStatHtml(diff) {
+      let added = 0;
+      let removed = 0;
+      for (const line of diff.split('\n')) {
+        if (line.startsWith('+++') || line.startsWith('---')) continue;
+        if (line.startsWith('+')) added++;
+        else if (line.startsWith('-')) removed++;
+      }
+      return '<span class="ai-diff-stat" title="Lines added / removed"><span class="add">+' + added + '</span> <span class="del">−' + removed + '</span></span>';
+    }
+
+    function addAiDiffStat(card, diff) {
+      const summary = card.querySelector('summary');
+      if (!summary || summary.querySelector('.ai-diff-stat')) return;
+      summary.insertAdjacentHTML('beforeend', diffStatHtml(diff));
+    }
+
+    /** A change that ran without asking ("Always allow"): show what it changed. */
+    function showAiToolDiff(event) {
+      const card = aiToolCards.get(event.id);
+      if (!card) return;
+      addAiDiffStat(card, event.diff);
+      const section = document.createElement('div');
+      section.className = 'ai-tool-section';
+      section.innerHTML = '<strong>Changes</strong>' + renderAiDiff(event.diff);
+      card.querySelector('.ai-tool-body').appendChild(section);
+    }
+
     function showAiApproval(event) {
       hideAiThinking();
       const card = aiToolCards.get(event.id) || createAiToolCard(event);
+      if (event.diff) addAiDiffStat(card, event.diff);
       card.classList.remove('running');
       card.classList.add('waiting');
       card.open = true;
@@ -5272,6 +5306,9 @@ supported_features: 40"></textarea>
           break;
         case 'approval_request':
           showAiApproval(event);
+          break;
+        case 'tool_diff':
+          showAiToolDiff(event);
           break;
         case 'tool_end':
           finishAiToolCard(event);

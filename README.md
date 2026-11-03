@@ -767,6 +767,11 @@ Snippet files are loaded automatically when TAE starts. After editing a `.snippe
 
 ## Changelog
 
+### 1.9.4
+
+- **Change**: AI chat edits show what they changed even after **Always allow**: the tool card has the diff and a "+N −M" line count in its header (approval requests show the count too), so a comment-only edit can be told apart from a logic change at a glance. Export includes it
+- **Fix**: diffs of files with Windows line endings no longer carry stray carriage returns (blank lines in exported chats)
+
 ### 1.9.3
 
 - **Feature**: **AI memory** (🧠 in the AI chat header): short notes the AI keeps across chats, such as what you call things ("sink light" = which entity), how rooms and devices are used, and preferences. The AI saves, changes and removes notes on its own (`remember`, `update_memory`, `forget`; no approval needed, each one shows in the chat), and you can add, edit and delete them in the panel or turn AI writing off. Notes go into every chat; MCP clients read them with `get_memory`

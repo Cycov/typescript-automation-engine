@@ -33,6 +33,7 @@ export type ChatEvent =
   | { type: "thinking" }
   | { type: "tool_start"; id: string; name: string; title: string; input: unknown }
   | { type: "approval_request"; id: string; name: string; title: string; summary: string; diff?: string }
+  | { type: "tool_diff"; id: string; summary: string; diff: string } //< a change that ran without asking
   | { type: "tool_end"; id: string; name: string; ok: boolean; output: string; declined?: boolean }
   | { type: "notice"; message: string }
   | { type: "error"; message: string }
@@ -378,6 +379,14 @@ export class ChatAgent {
         }
         if (decision === "always") session.alwaysAllow.add(tool.name);
         this.logger.log("info", "ai", `Approved: ${preview.summary}`);
+      } else if (tool.mutating && tool.preview) {
+        const preview = await previewTool(tool, parsed.data, this.ctx);
+        if ("text" in preview) {
+          finish(call.id, call.name, preview.text, true);
+          continue;
+        }
+        if (preview.diff) emit({ type: "tool_diff", id: call.id, summary: preview.summary, diff: preview.diff });
+        this.logger.log("info", "ai", `Allowed for this chat: ${preview.summary}`);
       }
 
       const outcome = await runTool(tool, parsed.data, this.ctx);

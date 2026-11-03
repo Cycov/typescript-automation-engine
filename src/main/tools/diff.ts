@@ -69,7 +69,7 @@ function diffLines(oldLines: string[], newLines: string[]): DiffOp[] {
 
 /** Unified diff of two texts; empty string when they are equal. */
 export function unifiedDiff(oldText: string, newText: string, label: string): string {
-  const ops = diffLines(oldText.split("\n"), newText.split("\n"));
+  const ops = diffLines(oldText.split(/\r?\n/), newText.split(/\r?\n/));
   const changed = ops.map((op, iOp) => (op.kind !== " " ? iOp : -1)).filter((iOp) => iOp >= 0);
   if (changed.length === 0) return "";
 
