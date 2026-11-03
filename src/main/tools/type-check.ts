@@ -141,6 +141,7 @@ export class TypeChecker {
       }
     }
     options.noEmit = true;
+    options.allowImportingTsExtensions = true; //< ts-node runs './x.ts' imports fine, and the editor allows them too
     if (!options.types && !options.typeRoots && this.typeRoots.length > 0) {
       options.typeRoots = this.typeRoots;
       options.types = ["node"];

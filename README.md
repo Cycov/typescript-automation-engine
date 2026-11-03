@@ -652,6 +652,8 @@ The AI has tools instead of a fixed context dump. It can:
 
 Anything that changes something (file edits, reloads, starting/stopping, service calls, saving tests) shows a preview - a diff for file edits - and waits for **Allow** / **Deny**. **Always allow** skips the question for that tool for the rest of the chat. Running tests needs no approval, since they never touch devices. Each message also tells the AI which file is open, any unsaved editor content, and your selection.
 
+Chats are saved in TAE, so they survive restarts and updates (kept 14 days, last 50 chats). Each message shows its time, and **Export** downloads the chat as Markdown, including tool calls and their results.
+
 Type **@** to mention a file or an entity: its content or current state goes with the message. For Claude models, each reply shows an estimated cost and the chat's running total (hover the badge for details).
 
 Chats survive a page reload; **History** keeps the last 10 and can continue them.
@@ -762,6 +764,16 @@ Snippet files are loaded automatically when TAE starts. After editing a `.snippe
 | Terminal command returns string error | Make sure to quote string arguments: `callService('light', 'turn_on', {entity_id: 'light.x'})` |
 
 ## Changelog
+
+### 1.9.2
+
+- **Fix**: AI chats are saved, so an add-on restart or update no longer wipes what the AI remembers of the conversation (before, the chat still showed on screen but the AI only saw the next message). Chats are kept for 14 days (last 50). If the AI no longer has a chat's earlier messages, the chat says so
+- **Fix**: `type_check` no longer reports imports ending in `.ts` as errors (TS5097); they run fine and the editor accepts them, so the AI kept "fixing" them
+- **Fix**: `edit_file` matches multi-line edits in files with Windows line endings, and when old_string is not found it shows the closest text in the file, so the AI can copy it instead of guessing
+- **Fix**: a chat message sent while TAE is disconnected (e.g. restarting) is no longer lost: it stays in the box with a note
+- **Change**: the AI asks what you mean when a request refers to something it cannot find in the conversation, instead of guessing
+- **Feature**: AI chat messages show their time, and **Export** downloads the chat as Markdown (messages, tool calls with input and results, approvals, times)
+- **Change**: the chat's context line shows the open file's path
 
 ### 1.9.1
 

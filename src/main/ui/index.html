@@ -844,16 +844,19 @@
       align-items: center;
       padding: 8px 12px;
       border-bottom: 1px solid var(--border);
-      gap: 8px;
+      gap: 6px;
       flex-shrink: 0;
     }
     .ai-sidebar-header h2 {
       font-size: 13px;
       font-weight: 600;
       color: var(--accent);
-      flex: 1;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
-    .ai-sidebar-header .btn { padding: 2px 8px; font-size: 10px; }
+    .ai-sidebar-header .btn { padding: 2px 7px; font-size: 10px; flex-shrink: 0; white-space: nowrap; }
+    .ai-sidebar-header .ai-context-label { flex: 1; min-width: 0; overflow: hidden; }
+    #aiStatusLabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
     .ai-messages {
       flex: 1;
       overflow-y: auto;
@@ -903,6 +906,8 @@
       color: var(--text-dim);
       margin-bottom: 3px;
     }
+    .ai-msg-time { text-transform: none; letter-spacing: 0; margin-left: 6px; opacity: 0.75; }
+    #aiContextInfo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
     .ai-msg-error {
       color: var(--red);
       font-size: 11px;
@@ -1568,6 +1573,7 @@
         <span class="ai-context-label"><span class="ai-status-dot" id="aiStatusDot"></span> <span id="aiStatusLabel">Not configured</span></span>
         <button class="btn" onclick="showAiSettingsDialog()" title="AI Settings">⚙</button>
         <button class="btn" onclick="toggleAiHistory()" id="aiHistoryBtn" title="Past chats">History</button>
+        <button class="btn" onclick="exportAiChat()" title="Download this chat as Markdown (messages, tool calls and results, with times)">Export</button>
         <button class="btn" onclick="clearAiChat()" title="New chat">New chat</button>
         <button class="btn" onclick="toggleAiChat()" title="Close">✕</button>
       </div>
@@ -4656,6 +4662,7 @@ supported_features: 40"></textarea>
     // ─── AI Chat functions ──────────────────────────
     const AI_HISTORY_MAX = 10;
     const AI_TITLE_MAX_CHARS = 60;
+    const MS_PER_DAY = 24 * 60 * 60 * 1000;
     const AI_TOOL_ARGS_PREVIEW_CHARS = 120;
     const AI_TOOL_INPUT_MAX_CHARS = 4000;
     const AI_PROVIDER_HELP = {
@@ -4710,6 +4717,7 @@ supported_features: 40"></textarea>
       if (aiConfig.configured) {
         dot.className = 'ai-status-dot configured';
         label.textContent = aiConfig.model || aiConfig.defaultModel || aiConfig.provider;
+        label.title = label.textContent;
       } else {
         dot.className = 'ai-status-dot unconfigured';
         label.textContent = 'Not configured';
@@ -4722,10 +4730,12 @@ supported_features: 40"></textarea>
       if (!label) return;
       if (!activeTab || !openTabs.has(activeTab)) {
         label.textContent = 'Context: no file open';
+        label.title = '';
         return;
       }
       const tab = openTabs.get(activeTab);
-      let text = 'Context: ' + activeTab.split('/').pop();
+      let text = 'Context: ' + activeTab;
+      label.title = activeTab;
       if (tab.modified) text += ' (unsaved edits)';
       if (monacoEditor && tab.model && monacoEditor.getModel() === tab.model) {
         const selection = monacoEditor.getSelection();
@@ -4896,6 +4906,10 @@ supported_features: 40"></textarea>
         showAiSettingsDialog();
         return;
       }
+      if (!connected) {
+        appendAiNotice('Not connected to TAE (restarting?), so the message was not sent. It is still in the box; send it again once the status shows Connected.');
+        return;
+      }
       if (aiTranscript.length === 0) document.getElementById('aiConversation').innerHTML = '';
       aiTranscript.push({ role: 'user', content: text });
       appendAiUserMessage(text);
@@ -4908,20 +4922,99 @@ supported_features: 40"></textarea>
       const context = buildAiEditorContext();
       const mentions = extractMentions(text);
       if (mentions.length) context.mentions = mentions;
-      send({ type: 'ai_chat_send', sessionId: aiSessionId, text, context });
+      send({ type: 'ai_chat_send', sessionId: aiSessionId, text, context, priorMessages: aiTranscript.length - 1 });
+    }
+
+    function aiTimeHtml(at) {
+      const date = new Date(at);
+      const sameDay = Math.abs(Date.now() - at) < MS_PER_DAY && date.getDate() === new Date().getDate();
+      const short = sameDay
+        ? date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+        : date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      return '<span class="ai-msg-time" title="' + escapeAttr(date.toLocaleString()) + '">' + escapeHtml(short) + '</span>';
     }
 
     function appendAiUserMessage(text) {
+      const at = Date.now();
       const wrapper = document.createElement('div');
       wrapper.className = 'ai-msg';
-      wrapper.innerHTML = '<div class="ai-msg-label">You</div><div class="ai-msg-user">' + highlightMentions(escapeHtml(text)) + '</div>';
+      wrapper.dataset.at = String(at);
+      wrapper.dataset.raw = text;
+      wrapper.innerHTML = '<div class="ai-msg-label">You' + aiTimeHtml(at) + '</div><div class="ai-msg-user">' + highlightMentions(escapeHtml(text)) + '</div>';
       document.getElementById('aiConversation').appendChild(wrapper);
       aiScrollToBottom();
+    }
+
+    function markdownFence(text, language) {
+      const longestRun = Math.max(2, ...((text.match(/`+/g) || []).map(run => run.length)));
+      const fence = '`'.repeat(longestRun + 1);
+      return fence + (language || '') + '\n' + text.replace(/\n+$/, '') + '\n' + fence;
+    }
+
+    function exportTime(element) {
+      const at = Number(element.dataset.at);
+      return at ? ' · ' + new Date(at).toLocaleString() : '';
+    }
+
+    function aiConversationMarkdown() {
+      const parts = [];
+      for (const element of document.getElementById('aiConversation').children) {
+        if (element.id === 'aiThinking') continue;
+        if (element.classList.contains('ai-msg-notice')) {
+          parts.push('> ' + element.textContent.trim() + exportTime(element));
+        } else if (element.classList.contains('ai-tool-card')) {
+          const status = element.classList.contains('ok') ? '✓' : element.classList.contains('failed') ? '✗' : element.classList.contains('declined') ? 'declined' : '…';
+          const title = (element.querySelector('.ai-tool-title') || {}).textContent || 'Tool';
+          const args = (element.querySelector('.ai-tool-args') || {}).textContent || '';
+          const lines = ['**Tool: ' + title + '**' + (args ? ' `' + args.replace(/`/g, "'") + '`' : '') + ' — ' + status + exportTime(element)];
+          for (const section of element.querySelectorAll('.ai-tool-section')) {
+            const heading = (section.querySelector('strong') || {}).textContent || '';
+            const pre = section.querySelector('pre');
+            if (pre) lines.push(heading + ':', markdownFence(pre.textContent, heading === 'Input' ? 'json' : ''));
+          }
+          const summary = element.querySelector('.ai-approval-summary');
+          if (summary) lines.push('Approval: ' + summary.textContent.trim());
+          const diff = element.querySelector('.ai-diff');
+          if (diff) lines.push(markdownFence(Array.from(diff.children).map(line => line.textContent).join('\n'), 'diff'));
+          const decision = element.querySelector('.ai-approval-result');
+          if (decision) lines.push('Decision: ' + decision.textContent.trim());
+          parts.push(lines.join('\n\n'));
+        } else if (element.classList.contains('ai-token-badge')) {
+          const usage = Array.from(element.childNodes).filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent).join('').trim();
+          if (usage) parts.push('_' + usage + '_');
+        } else if (element.querySelector('.ai-msg-user')) {
+          parts.push('## You' + exportTime(element) + '\n\n' + (element.dataset.raw || element.querySelector('.ai-msg-user').textContent));
+        } else if (element.querySelector('.ai-msg-assistant')) {
+          parts.push('## AI' + exportTime(element) + '\n\n' + (element.dataset.raw || element.querySelector('.ai-msg-assistant').innerText));
+        } else if (element.querySelector('.ai-msg-error')) {
+          parts.push('> **Error:** ' + element.textContent.trim() + exportTime(element));
+        }
+      }
+      return parts.join('\n\n');
+    }
+
+    function exportAiChat() {
+      const body = aiTranscript.length ? aiConversationMarkdown() : '';
+      if (!body) {
+        addLocalLog('info', 'ai', 'Nothing to export: the chat is empty');
+        return;
+      }
+      const now = new Date();
+      const header = [
+        '# TAE AI chat',
+        '',
+        'Exported ' + now.toLocaleString() + ((aiConfig.model || aiConfig.defaultModel) ? ' · model ' + (aiConfig.model || aiConfig.defaultModel) : '') + (aiChatCostUsd ? ' · cost ≈' + formatCost(aiChatCostUsd) : ''),
+        '',
+      ].join('\n');
+      const pad = (value) => String(value).padStart(2, '0');
+      const stamp = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) + '-' + pad(now.getHours()) + pad(now.getMinutes());
+      triggerDownload('tae-chat-' + stamp + '.md', header + '\n' + body + '\n', 'text/markdown');
     }
 
     function appendAiNotice(text) {
       const notice = document.createElement('div');
       notice.className = 'ai-msg ai-msg-notice';
+      notice.dataset.at = String(Date.now());
       notice.textContent = text;
       document.getElementById('aiConversation').appendChild(notice);
       aiScrollToBottom();
@@ -4930,6 +5023,7 @@ supported_features: 40"></textarea>
     function appendAiError(text) {
       const wrapper = document.createElement('div');
       wrapper.className = 'ai-msg';
+      wrapper.dataset.at = String(Date.now());
       wrapper.innerHTML = '<div class="ai-msg-error">' + escapeHtml(text) + '</div>';
       document.getElementById('aiConversation').appendChild(wrapper);
       aiScrollToBottom();
@@ -4962,9 +5056,11 @@ supported_features: 40"></textarea>
     function appendAiTextDelta(delta) {
       hideAiThinking();
       if (!aiTextBubble) {
+        const at = Date.now();
         const wrapper = document.createElement('div');
         wrapper.className = 'ai-msg';
-        wrapper.innerHTML = '<div class="ai-msg-label">AI</div><div class="ai-msg-assistant"></div>';
+        wrapper.dataset.at = String(at);
+        wrapper.innerHTML = '<div class="ai-msg-label">AI' + aiTimeHtml(at) + '</div><div class="ai-msg-assistant"></div>';
         document.getElementById('aiConversation').appendChild(wrapper);
         aiTextBubble = { element: wrapper.querySelector('.ai-msg-assistant'), text: '' };
       }
@@ -4981,6 +5077,7 @@ supported_features: 40"></textarea>
     function finishAiTextBubble() {
       if (!aiTextBubble) return;
       aiTextBubble.element.innerHTML = renderAiMarkdown(aiTextBubble.text);
+      aiTextBubble.element.parentElement.dataset.raw = aiTextBubble.text;
       if (aiTextBubble.text.trim()) aiTranscript.push({ role: 'assistant', content: aiTextBubble.text });
       aiTextBubble = null;
     }
@@ -5001,6 +5098,7 @@ supported_features: 40"></textarea>
       if (inputText.length > AI_TOOL_INPUT_MAX_CHARS) inputText = inputText.slice(0, AI_TOOL_INPUT_MAX_CHARS) + '\n…';
       const card = document.createElement('details');
       card.className = 'ai-tool-card running';
+      card.dataset.at = String(Date.now());
       card.innerHTML =
         '<summary><span class="ai-tool-status"></span>' +
           '<span class="ai-tool-title">' + escapeHtml(event.title || event.name) + '</span>' +

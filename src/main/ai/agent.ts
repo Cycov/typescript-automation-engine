@@ -22,7 +22,9 @@ import { EffortLevel, ProviderError, StopReason, ToolResultItem, ToolSpec, TurnR
 
 const MAX_TOOL_ROUNDS = 30;
 const SESSION_IDLE_MS = 12 * 60 * 60 * 1000;
-const MAX_SESSIONS = 20;
+const MAX_SESSIONS = 20; //< kept in memory; all chats are also saved
+const SAVED_CHAT_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+const SAVED_CHAT_MAX_COUNT = 50;
 const TOOL_OUTPUT_UI_MAX_CHARS = 6000;
 const INVALID_JSON_KEY = "INVALID_JSON";
 const MAX_MENTIONS = 10;
@@ -38,6 +40,19 @@ export type ChatEvent =
   | { type: "done"; usage: TurnUsage; stopReason: StopReason | "cancelled" | "error"; costUsd?: number };
 
 export type ApprovalDecision = "allow" | "deny" | "always";
+
+/** Where chats are saved, so they survive a restart of TAE. */
+export interface ChatSessionStore {
+  getChatSession(id: string): any | undefined;
+  saveChatSession(id: string, data: any): void;
+  deleteChatSession(id: string): void;
+  pruneChatSessions(maxAgeMs: number, keepCount: number): void;
+}
+
+export interface ChatSendOptions {
+  /** Messages the UI shows before this one; when the server has none of them, the user is told. */
+  priorMessages?: number;
+}
 
 interface ChatSession {
   id: string;
@@ -73,15 +88,22 @@ export class ChatAgent {
   private ctx: ToolContext;
   private logger: Logger;
   private sessions = new Map<string, ChatSession>();
+  private store: ChatSessionStore;
 
-  constructor(settings: AISettings, ctx: ToolContext, logger: Logger) {
+  constructor(settings: AISettings, ctx: ToolContext, logger: Logger, store: ChatSessionStore) {
     this.settings = settings;
     this.ctx = ctx;
     this.logger = logger;
+    this.store = store;
+    try {
+      store.pruneChatSessions(SAVED_CHAT_MAX_AGE_MS, SAVED_CHAT_MAX_COUNT);
+    } catch (err: any) {
+      logger.log("warn", "ai", `Could not prune saved chats: ${err?.message ?? err}`);
+    }
   }
 
   /** Handle one user message: run model turns and tools until the model is done. */
-  async send(sessionId: string, text: string, context: EditorContext | undefined, emit: (event: ChatEvent) => void): Promise<void> {
+  async send(sessionId: string, text: string, context: EditorContext | undefined, emit: (event: ChatEvent) => void, options: ChatSendOptions = {}): Promise<void> {
     const config = this.settings.get();
     if (!this.settings.isConfigured(config)) {
       emit({ type: "error", message: "AI is not configured. Open AI settings (⚙) and set a provider, API key and model." });
@@ -90,7 +112,7 @@ export class ChatAgent {
     }
 
     const provider = createChatProvider(config, this.settings.chatModel(config));
-    let session = this.sessions.get(sessionId);
+    let session = this.sessions.get(sessionId) ?? this.loadSession(sessionId);
     if (session && session.providerKey !== provider.key) {
       if (session.running) session.running.abort();
       if (session.history.length > 0) {
@@ -100,6 +122,12 @@ export class ChatAgent {
     }
     if (!session) {
       session = this.createSession(sessionId, provider.key, config.chatEffort);
+      if ((options.priorMessages ?? 0) > 0) {
+        emit({
+          type: "notice",
+          message: "TAE no longer has the earlier messages of this chat, so the AI only sees this message. Repeat what matters, or start a new chat.",
+        });
+      }
     }
     if (session.running) {
       emit({ type: "error", message: "Still working on the previous message — wait or press Stop." });
@@ -166,7 +194,36 @@ export class ChatAgent {
     } finally {
       session.running = null;
       session.lastUsed = Date.now();
+      this.saveSession(session);
       emit({ type: "done", usage, stopReason, ...(costUsd !== undefined ? { costUsd } : {}) });
+    }
+  }
+
+  private loadSession(sessionId: string): ChatSession | undefined {
+    let saved: any;
+    try {
+      saved = this.store.getChatSession(sessionId);
+    } catch (err: any) {
+      this.logger.log("warn", "ai", `Could not load saved chat: ${err?.message ?? err}`);
+    }
+    if (!saved || !Array.isArray(saved.history)) return undefined;
+    const session = this.createSession(sessionId, String(saved.providerKey || ""), saved.effort ?? "");
+    session.history = saved.history;
+    session.alwaysAllow = new Set(Array.isArray(saved.alwaysAllow) ? saved.alwaysAllow : []);
+    return session;
+  }
+
+  private saveSession(session: ChatSession): void {
+    if (session.history.length === 0) return;
+    try {
+      this.store.saveChatSession(session.id, {
+        providerKey: session.providerKey,
+        effort: session.effort,
+        history: session.history,
+        alwaysAllow: [...session.alwaysAllow],
+      });
+    } catch (err: any) {
+      this.logger.log("warn", "ai", `Could not save the chat: ${err?.message ?? err}`);
     }
   }
 
@@ -195,6 +252,9 @@ export class ChatAgent {
     const session = this.sessions.get(sessionId);
     session?.running?.abort();
     this.sessions.delete(sessionId);
+    try {
+      this.store.deleteChatSession(sessionId);
+    } catch {}
   }
 
   decide(sessionId: string, toolUseId: string, decision: ApprovalDecision): void {

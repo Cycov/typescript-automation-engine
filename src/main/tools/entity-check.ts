@@ -23,7 +23,7 @@ export function buildEntityCatalog(entityIds: string[], services: string[]): Ent
   };
 }
 
-function editDistance(left: string, right: string): number {
+export function editDistance(left: string, right: string): number {
   const previous = new Array(right.length + 1);
   const current = new Array(right.length + 1);
   for (let iColumn = 0; iColumn <= right.length; iColumn++) previous[iColumn] = iColumn;

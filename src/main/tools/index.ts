@@ -10,7 +10,7 @@ import { FileManager } from "../file-manager";
 import { Logger, LogEntry } from "../logging";
 import { TypeChecker } from "./type-check";
 import { unifiedDiff } from "./diff";
-import { EntityCatalog, buildEntityCatalog } from "./entity-check";
+import { EntityCatalog, buildEntityCatalog, editDistance } from "./entity-check";
 import { TestManager, testScenarioSchema } from "../test-manager";
 import { ChangeSource, FileHistory } from "../file-history";
 import { AutomationInfo, HAEntityState, TraceInfo } from "../../shared/messages";
@@ -32,6 +32,10 @@ const TIMELINE_MAX_COUNT = 50;
 const HISTORY_DEFAULT_COUNT = 20;
 const TEST_TIMELINE_MAX_ITEMS = 200;
 const MS_PER_SECOND = 1000;
+const EDIT_HINT_EXTRA_LINES = 2; //< shown around a near miss of edit_file
+const EDIT_HINT_MAX_PLACES = 3;
+const EDIT_HINT_MAX_DISTANCE_RATIO = 0.3; //< a line this different (share of its length) still counts as the near miss
+const EDIT_HINT_MAX_LINE_CHARS = 300; //< longer lines are only compared exactly
 
 export interface ToolContext {
   haClient: HAClient;
@@ -115,10 +119,45 @@ function countOccurrences(haystack: string, needle: string): number {
   return count;
 }
 
+function normalizeForHint(line: string): string {
+  return line.trim().replace(/\s+/g, " ").replace(/[;,]+$/, "");
+}
+
+/** The file's real text where a missed old_string was most likely aimed (by its first line). */
+function nearMissHint(content: string, oldString: string): string {
+  const wanted = oldString.split(/\r?\n/);
+  const firstWanted = wanted.find((line) => line.trim());
+  if (!firstWanted) return "";
+  const target = normalizeForHint(firstWanted);
+  const lines = content.split(/\r?\n/);
+  const scored: Array<{ iLine: number; distance: number }> = [];
+  for (let iLine = 0; iLine < lines.length; iLine++) {
+    const candidate = normalizeForHint(lines[iLine]);
+    if (!candidate) continue;
+    if (candidate === target) {
+      scored.push({ iLine, distance: 0 });
+    } else if (candidate.length <= EDIT_HINT_MAX_LINE_CHARS && target.length <= EDIT_HINT_MAX_LINE_CHARS) {
+      const distance = editDistance(candidate, target);
+      if (distance <= Math.max(candidate.length, target.length) * EDIT_HINT_MAX_DISTANCE_RATIO) scored.push({ iLine, distance });
+    }
+  }
+  if (scored.length === 0) return " Nothing in the file looks like its first line; read_file it again.";
+  scored.sort((left, right) => left.distance - right.distance || left.iLine - right.iLine);
+  const places = scored.slice(0, EDIT_HINT_MAX_PLACES).map(({ iLine }) => {
+    const end = Math.min(lines.length, iLine + wanted.length + EDIT_HINT_EXTRA_LINES);
+    return lines.slice(iLine, end).map((line, iOffset) => `${iLine + iOffset + 1}| ${line}`).join("\n");
+  });
+  return ` Closest text in the file (line numbers are not part of it); copy old_string from here exactly:\n${places.join("\n---\n")}`;
+}
+
 function applyEdit(content: string, oldString: string, newString: string, replaceAll: boolean, label: string): string {
   if (!oldString) fail("old_string is empty; use write_file to create or replace a whole file");
+  if (content.includes("\r\n") && !oldString.includes("\r\n") && oldString.includes("\n")) {
+    oldString = oldString.replace(/\n/g, "\r\n"); //< the file uses Windows line endings
+    newString = newString.replace(/\r?\n/g, "\r\n");
+  }
   const occurrences = countOccurrences(content, oldString);
-  if (occurrences === 0) fail(`old_string not found in ${label}. read_file it again and copy the exact text, including whitespace.`);
+  if (occurrences === 0) fail(`old_string not found in ${label}.${nearMissHint(content, oldString)}`);
   if (occurrences > 1 && !replaceAll) {
     fail(`old_string appears ${occurrences} times in ${label}; add surrounding lines to make it unique, or set replace_all`);
   }

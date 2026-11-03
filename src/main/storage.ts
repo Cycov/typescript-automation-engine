@@ -44,6 +44,11 @@ export class Storage {
         created_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS file_history_path ON file_history (path, id);
+      CREATE TABLE IF NOT EXISTS chat_sessions (
+        id TEXT PRIMARY KEY,
+        data TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
     `);
 
     this.stmtGet = this.db.prepare(
@@ -87,6 +92,29 @@ export class Storage {
           "ON CONFLICT(id) DO UPDATE SET scenario = excluded.scenario, updated_at = excluded.updated_at"
       )
       .run(id, JSON.stringify(scenario), Date.now());
+  }
+
+  getChatSession(id: string): any | undefined {
+    const row = this.db.prepare("SELECT data FROM chat_sessions WHERE id = ?").get(id) as { data: string } | undefined;
+    return row ? JSON.parse(row.data) : undefined;
+  }
+
+  saveChatSession(id: string, data: any): void {
+    this.db
+      .prepare("INSERT INTO chat_sessions (id, data, updated_at) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at")
+      .run(id, JSON.stringify(data), Date.now());
+  }
+
+  deleteChatSession(id: string): void {
+    this.db.prepare("DELETE FROM chat_sessions WHERE id = ?").run(id);
+  }
+
+  /** Drop chats older than maxAgeMs, and the oldest beyond keepCount. */
+  pruneChatSessions(maxAgeMs: number, keepCount: number): void {
+    this.db.prepare("DELETE FROM chat_sessions WHERE updated_at < ?").run(Date.now() - maxAgeMs);
+    this.db
+      .prepare("DELETE FROM chat_sessions WHERE id NOT IN (SELECT id FROM chat_sessions ORDER BY updated_at DESC LIMIT ?)")
+      .run(keepCount);
   }
 
   saveTestResult(id: string, result: any): void {

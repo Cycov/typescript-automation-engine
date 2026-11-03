@@ -306,7 +306,7 @@ const toolContext: ToolContext = {
   notifyTestsChanged: broadcastTests,
 };
 
-const chatAgent = new ChatAgent(aiSettings, { ...toolContext, changeSource: "ai-chat" }, logger);
+const chatAgent = new ChatAgent(aiSettings, { ...toolContext, changeSource: "ai-chat" }, logger, storage);
 
 workerManager.onReloaded(() => broadcast({ type: "reload_ack", success: true }));
 
@@ -866,9 +866,13 @@ wss.on("connection", (ws) => {
           const sessionId = String(msg.sessionId || "");
           if (!sessionId || typeof msg.text !== "string") break;
           chatSessions.add(sessionId);
-          await chatAgent.send(sessionId, msg.text, msg.context, (event) => {
-            sendJson({ type: "ai_event", sessionId, event });
-          });
+          await chatAgent.send(
+            sessionId,
+            msg.text,
+            msg.context,
+            (event) => sendJson({ type: "ai_event", sessionId, event }),
+            { priorMessages: Number(msg.priorMessages) || 0 }
+          );
           break;
         }
 

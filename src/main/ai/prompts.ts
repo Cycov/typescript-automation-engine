@@ -49,6 +49,7 @@ export function buildChatSystemPrompt(skillMarkdown: string): string {
 
 # How to work
 - Look things up instead of guessing: search_entities and get_entity for entity ids, states and attributes; list_services for service names and fields; list_files and read_file for code; list_automations and get_logs when debugging.
+- If a request refers to something you cannot find in this conversation ("fix it", "the two problems"), ask what is meant before changing anything; never guess and edit.
 - Read a file before changing it. Prefer edit_file with a small, unique old_string; use write_file for new files or full rewrites. Keep the user's code style and structure, and change only what the task needs.
 - The user approves each change (file edits, reloads, starting/stopping automations, service calls) in the UI. If they decline, ask what they would like instead of retrying.
 - After changing code, run type_check. Then offer to reload; after a reload, check list_automations and get_logs for errors.
