@@ -6,18 +6,61 @@
  */
 
 import { parentPort } from "worker_threads";
-import { MainToWorkerMessage, WorkerToMainMessage } from "../shared/messages";
+import {
+  HAEntityState,
+  MainToWorkerMessage,
+  ShutdownReason,
+  TraceInfo,
+  TraceTrigger,
+  WorkerToMainMessage,
+} from "../shared/messages";
 
-type EventHandler = (data: any) => void;
-type StateChangeHandler = (entityId: string, oldState: any, newState: any) => void;
+const REQUEST_TIMEOUT_MS = 30000;
+const nativeSetTimeout = setTimeout; //< captured before automations can wrap the timer functions
+const nativeClearTimeout = clearTimeout;
 
-export class Bridge {
+export type EventHandler = (data: any) => void;
+export type StateChangedHandler = (entityId: string, oldState: HAEntityState | null, newState: HAEntityState | null) => void;
+export type StateSnapshotHandler = (states: HAEntityState[]) => void;
+
+/** What the automation manager needs from its environment: the main thread, or a test simulation. */
+export interface WorkerHost {
+  request(method: string, args: any): Promise<any>;
+  onEvent(subId: string, handler: EventHandler): void;
+  removeHandler(subId: string): void;
+  onStateChanged(handler: StateChangedHandler): void;
+  onStateSnapshot(handler: StateSnapshotHandler): void;
+  sendLog(level: string, automationId: string, message: any, extra?: any): void;
+  sendAutomationRegistered(automation: { id: string; className: string; state: string }): void;
+  sendAutomationStateChanged(id: string, state: string, error?: string): void;
+  sendAutomationError(id: string, error: string): void;
+  sendError(message: string, stack?: string): void;
+  sendTrace(trace: TraceInfo): void;
+  sendTraceIgnored(automationId: string, at: number, trigger: TraceTrigger): void;
+}
+
+/** Turn a log message into the string sent to the log. */
+export function formatLogMessage(message: any): string {
+  if (typeof message === "string") return message;
+  if (message === null || message === undefined) return String(message);
+  if (typeof message === "object") {
+    try {
+      return JSON.stringify(message, null, 2);
+    } catch {
+      return String(message);
+    }
+  }
+  return String(message);
+}
+
+export class Bridge implements WorkerHost {
   private requestId = 0;
-  private pendingRequests = new Map<number, { resolve: Function; reject: Function }>();
+  private pendingRequests = new Map<number, { resolve: Function; reject: Function; timer: ReturnType<typeof setTimeout> }>();
   private eventHandlers = new Map<string, EventHandler>(); // subId → handler
-  private stateChangeHandlers = new Map<string, StateChangeHandler>(); // subId → handler
+  private stateChangedHandler?: StateChangedHandler;
+  private stateSnapshotHandler?: StateSnapshotHandler;
   private commandHandlers = new Map<string, (automationId: string) => void>();
-  private shutdownHandler?: () => void;
+  private shutdownHandler?: (reason: ShutdownReason) => void;
 
   constructor() {
     if (!parentPort) {
@@ -35,6 +78,7 @@ export class Bridge {
         const pending = this.pendingRequests.get(msg.id);
         if (pending) {
           this.pendingRequests.delete(msg.id);
+          nativeClearTimeout(pending.timer);
           if (msg.error) {
             pending.reject(new Error(msg.error));
           } else {
@@ -56,15 +100,17 @@ export class Bridge {
         break;
       }
 
-      case "stateChange": {
-        const scHandler = this.stateChangeHandlers.get(msg.subId);
-        if (scHandler) {
-          try {
-            scHandler(msg.entityId, msg.oldState, msg.newState);
-          } catch (e: any) {
-            this.sendLog("error", "bridge", `State change handler error: ${e.message}`, { stack: e.stack });
-          }
+      case "stateChanged": {
+        try {
+          this.stateChangedHandler?.(msg.entityId, msg.oldState, msg.newState);
+        } catch (e: any) {
+          this.sendLog("error", "bridge", `State change handler error: ${e.message}`, { stack: e.stack });
         }
+        break;
+      }
+
+      case "stateSnapshot": {
+        this.stateSnapshotHandler?.(msg.states);
         break;
       }
 
@@ -77,7 +123,7 @@ export class Bridge {
       }
 
       case "shutdown": {
-        this.shutdownHandler?.();
+        this.shutdownHandler?.(msg.reason);
         break;
       }
     }
@@ -88,17 +134,16 @@ export class Bridge {
    */
   request(method: string, args: any): Promise<any> {
     return new Promise((resolve, reject) => {
-      const id = ++this.requestId;
-      this.pendingRequests.set(id, { resolve, reject });
-      this.send({ type: "request", id, method, args });
-
-      // Timeout after 30s
-      setTimeout(() => {
+      this.requestId++;
+      const id = this.requestId;
+      const timer = nativeSetTimeout(() => {
         if (this.pendingRequests.has(id)) {
           this.pendingRequests.delete(id);
           reject(new Error(`Request ${method} timed out`));
         }
-      }, 30000);
+      }, REQUEST_TIMEOUT_MS);
+      this.pendingRequests.set(id, { resolve, reject, timer });
+      this.send({ type: "request", id, method, args });
     });
   }
 
@@ -110,18 +155,24 @@ export class Bridge {
   }
 
   /**
-   * Register a handler for state change events.
+   * Register the handler for every HA state change (one per worker).
    */
-  onStateChange(subId: string, handler: StateChangeHandler): void {
-    this.stateChangeHandlers.set(subId, handler);
+  onStateChanged(handler: StateChangedHandler): void {
+    this.stateChangedHandler = handler;
   }
 
   /**
-   * Remove event/state handler.
+   * Register the handler for full state refreshes (sent after an HA reconnect).
+   */
+  onStateSnapshot(handler: StateSnapshotHandler): void {
+    this.stateSnapshotHandler = handler;
+  }
+
+  /**
+   * Remove an event handler.
    */
   removeHandler(subId: string): void {
     this.eventHandlers.delete(subId);
-    this.stateChangeHandlers.delete(subId);
   }
 
   /**
@@ -134,7 +185,7 @@ export class Bridge {
   /**
    * Register shutdown handler.
    */
-  onShutdown(handler: () => void): void {
+  onShutdown(handler: (reason: ShutdownReason) => void): void {
     this.shutdownHandler = handler;
   }
 
@@ -142,22 +193,7 @@ export class Bridge {
    * Send a log message to main.
    */
   sendLog(level: string, automationId: string, message: any, extra?: any): void {
-    // Serialize objects before sending over the message port
-    let formattedMessage: string;
-    if (typeof message === "string") {
-      formattedMessage = message;
-    } else if (message === null || message === undefined) {
-      formattedMessage = String(message);
-    } else if (typeof message === "object") {
-      try {
-        formattedMessage = JSON.stringify(message, null, 2);
-      } catch {
-        formattedMessage = String(message);
-      }
-    } else {
-      formattedMessage = String(message);
-    }
-    this.send({ type: "log", level, automationId, message: formattedMessage, extra });
+    this.send({ type: "log", level, automationId, message: formatLogMessage(message), extra });
   }
 
   /**
@@ -182,6 +218,13 @@ export class Bridge {
   }
 
   /**
+   * Report a callback error; the automation keeps running.
+   */
+  sendAutomationError(id: string, error: string): void {
+    this.send({ type: "automationError", id, error, at: new Date().toISOString() });
+  }
+
+  /**
    * Notify main of automation removal.
    */
   sendAutomationRemoved(id: string): void {
@@ -191,13 +234,14 @@ export class Bridge {
   /**
    * Notify main that init is complete.
    */
-  sendInitComplete(automations: Array<{ id: string; className: string; state: string }>): void {
+  sendInitComplete(automations: Array<{ id: string; className: string; state: string; error?: string }>): void {
     this.send({
       type: "initComplete",
       automations: automations.map((a) => ({
         id: a.id,
         className: a.className,
         state: a.state as any,
+        error: a.error,
       })),
     });
   }
@@ -214,6 +258,19 @@ export class Bridge {
    */
   sendError(message: string, stack?: string): void {
     this.send({ type: "error", message, stack });
+  }
+
+  sendTrace(trace: TraceInfo): void {
+    this.send({ type: "trace", trace });
+  }
+
+  sendTraceIgnored(automationId: string, at: number, trigger: TraceTrigger): void {
+    this.send({ type: "traceIgnored", automationId, at, trigger });
+  }
+
+  /** Post any message to main (test results). */
+  post(msg: WorkerToMainMessage): void {
+    this.send(msg);
   }
 
   private send(msg: WorkerToMainMessage): void {

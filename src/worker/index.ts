@@ -8,16 +8,23 @@
  * 4. Configures ts-node for TypeScript execution
  * 5. Loads and runs automations/index.ts
  * 6. Handles shutdown signals
+ *
+ * With `workerData.test` it instead runs one test scenario in isolation:
+ * simulated states and clock; service calls reach Home Assistant only with live calls.
  */
 
 import { workerData } from "worker_threads";
 import * as path from "path";
 import * as fs from "fs";
-import { Bridge } from "./bridge";
+import { Bridge, WorkerHost } from "./bridge";
 import { AutomationManager } from "./automation-manager";
-import { WorkerConfig } from "../shared/messages";
+import { TestHost } from "./test-host";
+import { runTestScenario } from "./test-runner";
+import { WorkerConfig, WorkerData } from "../shared/messages";
 
-const config: WorkerConfig = workerData?.config;
+const data: WorkerData | undefined = workerData;
+const config: WorkerConfig | undefined = data?.config;
+const testSpec = data?.test;
 
 // ─── Security: Block child_process ──────────────────────────
 
@@ -35,7 +42,16 @@ Module._resolveFilename = function (request: string, parent: any, ...rest: any[]
 // ─── Initialize bridge and manager ──────────────────────────
 
 const bridge = new Bridge();
-const manager = new AutomationManager(bridge);
+const testHost = testSpec
+  ? new TestHost(data?.states ?? [], {
+      startTimeMs: testSpec.startTimeMs,
+      applyEffects: testSpec.scenario.applyEffects,
+      storage: testSpec.storage,
+      liveCaller: testSpec.liveCalls ? (args) => bridge.request("callService", args) : undefined,
+    })
+  : null;
+const host: WorkerHost = testHost ?? bridge;
+const manager = new AutomationManager(host, data?.states ?? []);
 
 // Make manager available globally for the tae API module
 (global as any).__tae_automation_manager = manager;
@@ -78,10 +94,10 @@ bridge.onCommand("startAutomation", async (automationId: string) => {
 
 // ─── Handle shutdown ────────────────────────────────────────
 
-bridge.onShutdown(async () => {
-  bridge.sendLog("info", "worker", "Shutdown requested, stopping all automations...");
+bridge.onShutdown(async (reason) => {
+  bridge.sendLog("info", "worker", `Shutdown requested (${reason}), stopping all automations...`);
   try {
-    await manager.unloadAll();
+    await manager.unloadAll(reason);
   } catch (e: any) {
     bridge.sendLog("error", "worker", `Shutdown error: ${e.message}`);
   }
@@ -91,27 +107,27 @@ bridge.onShutdown(async () => {
 // ─── Catch unhandled errors ─────────────────────────────────
 
 process.on("uncaughtException", (err) => {
-  bridge.sendError(`Uncaught exception: ${err.message}`, err.stack);
+  host.sendError(`Uncaught exception: ${err.message}`, err.stack);
 });
 
 process.on("unhandledRejection", (reason: any) => {
   const message = reason instanceof Error ? reason.message : String(reason);
   const stack = reason instanceof Error ? reason.stack : undefined;
-  bridge.sendError(`Unhandled rejection: ${message}`, stack);
+  host.sendError(`Unhandled rejection: ${message}`, stack);
 });
 
 // ─── Load automations ───────────────────────────────────────
 
-async function loadAutomations(): Promise<void> {
+/** Load index.ts and run onInit(). Returns an error message on failure. */
+async function loadAutomations(): Promise<string | undefined> {
   const indexPath = path.join(automationsPath, "index.ts");
 
   if (!fs.existsSync(indexPath)) {
-    bridge.sendLog("warn", "worker", `No automations found at ${indexPath}`);
-    bridge.sendInitComplete([]);
-    return;
+    host.sendLog("warn", "worker", `No automations found at ${indexPath}`);
+    return `No automations found at ${indexPath}`;
   }
 
-  bridge.sendLog("info", "worker", `Loading automations from ${indexPath}`);
+  host.sendLog("info", "worker", `Loading automations from ${indexPath}`);
 
   try {
     const automationModule = require(indexPath);
@@ -119,17 +135,53 @@ async function loadAutomations(): Promise<void> {
     if (typeof automationModule.onInit === "function") {
       await automationModule.onInit();
     } else {
-      bridge.sendLog("warn", "worker", "automations/index.ts does not export onInit()");
+      host.sendLog("warn", "worker", "automations/index.ts does not export onInit()");
     }
-
-    bridge.sendInitComplete(manager.getAutomations());
+    return undefined;
   } catch (e: any) {
-    bridge.sendError(`Failed to load automations: ${e.message}`, e.stack);
-    bridge.sendInitComplete(manager.getAutomations());
+    host.sendError(`Failed to load automations: ${e.message}`, e.stack);
+    return `Failed to load automations: ${e.message}`;
+  }
+}
+
+async function runLive(): Promise<void> {
+  manager.enableTracing();
+  bridge.sendReady();
+  await loadAutomations();
+  bridge.sendInitComplete(manager.getAutomations());
+}
+
+async function runTest(): Promise<void> {
+  if (!testSpec || !testHost) return;
+  const startedAt = Date.now();
+  manager.setStartFilter(testSpec.scenario.automations);
+  try {
+    const result = await runTestScenario({ spec: testSpec, host: testHost, manager, loadAutomations });
+    bridge.post({ type: "testResult", result: { ...result, ranAt: new Date(startedAt).toISOString(), realMs: Date.now() - startedAt } });
+  } catch (e: any) {
+    bridge.post({
+      type: "testResult",
+      result: {
+        scenarioId: testSpec.scenario.id,
+        name: testSpec.scenario.name,
+        passed: false,
+        error: `Test run failed: ${e.message}`,
+        ranAt: new Date(startedAt).toISOString(),
+        realMs: Date.now() - startedAt,
+        simulatedMs: 0,
+        items: testHost.items,
+        expectations: [],
+        serviceCalls: testHost.calls.length,
+        automations: [],
+      },
+    });
   }
 }
 
 // ─── Start ──────────────────────────────────────────────────
 
-bridge.sendReady();
-loadAutomations();
+if (testSpec) {
+  runTest();
+} else {
+  runLive();
+}

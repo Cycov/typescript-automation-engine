@@ -4,7 +4,9 @@ You are an expert at writing TypeScript automations for the **TAE (TypeScript Au
 
 ## Project Structure
 
-Automations live in `/root/addons/typescript-automation-engine/automations/`. The entry point is `automations/index.ts`. You can create additional files and import them from `index.ts`.
+Automations live in the TAE workspace (inside the add-on at `/data/automations`; edit them in the TAE editor, or export/import them through the sync folder, `/share/tae` by default). Paths below are relative to the workspace.
+
+TAE loads **only `index.ts`** and calls its exported `onInit()`. Put automations in other files when it helps, export the classes (or a setup function), and import them in `index.ts`. TAE runs the code with ts-node in transpile-only mode: type errors do not stop it from loading, so type-check separately.
 
 ## Core Pattern
 
@@ -32,10 +34,26 @@ export async function onInit() {
 ```
 
 **Rules:**
-- Every file that defines automations MUST export an `onInit()` function
+- `index.ts` MUST export `onInit()`; it is the only function TAE calls. Other files just export classes or helpers
 - `onInit()` must call `registerAutomation()` then `startAutomation()` for each automation
 - Multiple automations can be in one file — create, register, and start each one in `onInit()`
 - The constructor optionally takes a custom string ID; if omitted, auto-generates from class name
+
+```typescript
+// lights/hallway.ts
+import { Automation } from 'tae';
+export class HallwayLights extends Automation { /* ... */ }
+
+// index.ts
+import { registerAutomation, startAutomation } from 'tae';
+import { HallwayLights } from './lights/hallway';
+
+export function onInit() {
+  const hallway = new HallwayLights();
+  registerAutomation(hallway);
+  startAutomation(hallway);
+}
+```
 
 ## Full API Reference
 
@@ -85,13 +103,14 @@ Call any Home Assistant service.
 | `data`   | `Record<string, any>?`   | Usually includes `entity_id`. Other fields are service-specific. |
 | Returns  | `Promise<any>`           | HA response (usually null for fire-and-forget). |
 
-#### `this.subscribeToStateChangeEvent(entityId, callback)`
+#### `this.subscribeToStateChangeEvent(entityId, callback, emitAll?)`
 Watch a specific entity for state changes. **This is the most commonly used method.**
 
 | Param      | Type                                  | Description |
 |------------|---------------------------------------|-------------|
 | `entityId` | `string`                              | Full entity ID: `"binary_sensor.motion"`, `"sensor.temperature"`, `"light.bedroom"`, etc. |
 | `callback` | `(data: StateChangeData) => void`     | Called when the entity changes. |
+| `emitAll`  | `boolean?`                            | Default `false`: only called when the state **value** changes (attribute-only updates and removals are skipped). `true`: every update, e.g. to react to attributes such as brightness. |
 | Returns    | `() => void`                          | Unsubscribe function (optional — auto-cleaned on stop). |
 
 #### `this.subscribeToEvent(eventType, callback)`
@@ -103,7 +122,7 @@ Listen for raw HA events. Use `subscribeToStateChangeEvent` for state changes in
 | `callback`  | `(event: HAEvent) => void`    | Called per event. |
 | Returns     | `() => void`                  | Unsubscribe function. |
 
-#### `this.onStateChange(callback)`
+#### `this.onStateChange(callback, emitAll?)`
 Listen to ALL entity state changes. Fires very frequently — use sparingly.
 
 | Param      | Type                                  | Description |
@@ -115,8 +134,16 @@ Listen to ALL entity state changes. Fires very frequently — use sparingly.
 
 | Method             | Description                                               | Returns |
 |--------------------|-----------------------------------------------------------|---------|
-| `getEntityState`   | Read from in-memory cache (fast, no network, may be stale) | `Promise<HAEntityState \| undefined>` |
-| `fetchEntityState` | Live API call to HA (fresh but slower)                     | `Promise<HAEntityState \| undefined>` |
+| `getEntityState`   | TAE's local copy of all states (no network call). Updated before state-change callbacks run, so it is current inside them | `Promise<HAEntityState \| undefined>` |
+| `fetchEntityState` | Live API call to HA for one entity (rarely needed)         | `Promise<HAEntityState \| undefined>` |
+
+The standalone `getEntityState(entityId)` returns the same data **synchronously** — use it in helper functions: `getEntityState('input_boolean.guest_mode')?.state === 'on'`.
+
+#### Errors in callbacks
+If a callback throws or an awaited `callService` rejects, TAE logs the error and the automation **keeps running** (the UI shows ⚠). Only an error thrown by `onStart()` puts the automation in the `error` state. Catch errors yourself when a failure needs special handling.
+
+#### `this.sleep(ms)`
+`await this.sleep(500);` — pause inside async code.
 
 #### Logging
 
@@ -165,9 +192,9 @@ Standalone logging logs with source `"user"`: `log('message')`, `debug('detail')
 | Hook         | When Called                              | Use For                              |
 |--------------|------------------------------------------|--------------------------------------|
 | `onStart()`  | Automation starts (via `startAutomation`) | Setting up subscriptions and logic   |
-| `onStop()`   | Automation stops (via UI or API)         | Cleaning up non-subscription resources (timers, intervals) |
-| `onReload()` | Engine performs a reload                 | Re-evaluating state                  |
-| `onUnload()` | Automation permanently removed           | Final cleanup before shutdown        |
+| `onStop()`   | Automation stops (UI, API, reload, shutdown) | Cleaning up non-subscription resources (timers, intervals) |
+| `onReload()` | Before a reload (then `onStop()`, `onUnload()`; fresh instances are created from the new code) | Saving state for the new instance |
+| `onUnload()` | Automation permanently removed (reload or shutdown) | Final cleanup                   |
 
 ## Common Patterns and Templates
 
@@ -495,7 +522,7 @@ export async function onInit() {
 ## Do's and Don'ts
 
 ### Do:
-- Always export `onInit()` from every automation file
+- Export `onInit()` from `index.ts` and register/start every automation there
 - Always call `registerAutomation()` then `startAutomation()` in `onInit()`
 - Add a file-level comment at the top of each file describing what the file contains and its purpose
 - Add a thorough JSDoc description above each automation class explaining what it does, what entities it interacts with, and its behavior
@@ -511,7 +538,7 @@ export async function onInit() {
 - Use guard clauses (`if (condition) return;`) to keep callbacks clean
 
 ### Don't:
-- Don't forget to export `onInit()` — the file won't load without it
+- Don't forget to export `onInit()` from `index.ts` — nothing runs without it; `onInit()` in other files is never called
 - Don't omit class or file descriptions — every automation class needs a JSDoc comment and every file needs a top-level comment describing its purpose (this enables AI-assisted editing later)
 - Don't use `onStateChange` unless you truly need ALL entity changes — it fires constantly
 - Don't create infinite loops (e.g., reacting to a state you're setting)
@@ -560,8 +587,9 @@ import {
   subscribeToEvent,                // Standalone event subscription
   subscribeToStateChangeEvent,     // Standalone state subscription
   onStateChange,                   // Standalone all-state subscription
-  getEntityState,                  // Read entity state from cache (sync)
-  fetchEntityState,                // Fetch entity state from HA API (async)
+  getEntityState,                  // Read entity state from TAE's local copy (sync)
+  fetchEntityState,                // Fetch one entity from HA API (async)
+  getAutomations,                  // Registered automations: [{ id, className, state }]
   log, warn, error, debug,         // Standalone logging
   LogLevel,                        // LogLevel.Debug, .Info, .Warn, .Error
   // Types (for type annotations):

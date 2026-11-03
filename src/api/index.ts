@@ -129,10 +129,15 @@ export function getAutomations(): Array<{ id: string; className: string; state: 
 import type { HAEntityState } from "./types";
 
 /**
- * Read entity state from in-memory cache (fast, no network, may be stale).
+ * Read an entity's current state synchronously from TAE's local copy.
+ * The copy is updated before state-change callbacks run, so it is current
+ * inside a callback. No network call.
+ *
+ * @example
+ * const guestMode = getEntityState('input_boolean.guest_mode')?.state === 'on';
  */
 export function getEntityState(entityId: string): HAEntityState | undefined {
-  return getManager().getEntityState(entityId);
+  return getManager().getEntityStateSync(entityId);
 }
 
 /**

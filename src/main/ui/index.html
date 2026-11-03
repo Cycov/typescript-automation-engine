@@ -822,7 +822,8 @@
     /* ─── AI Chat Sidebar ───────────────────────────── */
     .ai-sidebar {
       width: 0;
-      max-width: 500px;
+      max-width: 70vw;
+      position: relative;
       background: var(--bg-secondary);
       border-left: 1px solid var(--border);
       display: flex;
@@ -831,7 +832,13 @@
       overflow: hidden;
       transition: width 0.2s ease;
     }
-    .ai-sidebar.open { width: 380px; }
+    .ai-sidebar.open { width: var(--ai-sidebar-width, 380px); }
+    .ai-sidebar.resizing, .tests-result.resizing { transition: none; }
+    .col-resize { position: absolute; top: 0; width: 6px; height: 100%; cursor: col-resize; z-index: 10; }
+    .col-resize:hover, .col-resize.active { background: var(--accent); }
+    .ai-sidebar > .col-resize { left: 0; }
+    .tests-result-resize { position: relative; flex-shrink: 0; width: 0; }
+    .tests-result-resize .col-resize { left: -3px; }
     .ai-sidebar-header {
       display: flex;
       align-items: center;
@@ -917,54 +924,122 @@
       40% { content: '..'; }
       60%, 100% { content: '...'; }
     }
-    .ai-thinking-details {
+    .ai-tool-card {
       border: 1px solid var(--border);
       border-radius: 6px;
       background: var(--bg-tertiary);
       overflow: hidden;
+      margin-bottom: 8px;
+      font-size: 11px;
     }
-    .ai-thinking-details summary {
+    .ai-tool-card summary {
       cursor: pointer;
       padding: 5px 10px;
-      font-size: 11px;
       color: var(--text-dim);
-      font-style: italic;
       list-style: none;
       display: flex;
       align-items: center;
-      gap: 5px;
+      gap: 6px;
       user-select: none;
+      min-width: 0;
     }
-    .ai-thinking-details summary::-webkit-details-marker { display: none; }
-    .ai-thinking-details summary::before {
+    .ai-tool-card summary::-webkit-details-marker { display: none; }
+    .ai-tool-card summary::before {
       content: '▸';
-      font-style: normal;
       transition: transform 0.15s;
+      flex-shrink: 0;
     }
-    .ai-thinking-details[open] summary::before { transform: rotate(90deg); }
-    .ai-thinking-body {
-      padding: 8px 10px;
+    .ai-tool-card[open] summary::before { transform: rotate(90deg); }
+    .ai-tool-card .ai-tool-status { flex-shrink: 0; width: 14px; text-align: center; }
+    .ai-tool-card .ai-tool-title { color: var(--text); font-weight: 600; flex-shrink: 0; }
+    .ai-tool-card .ai-tool-args {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      min-width: 0;
+    }
+    .ai-tool-card.running .ai-tool-status::after { content: '…'; color: var(--accent); }
+    .ai-tool-card.ok .ai-tool-status::after { content: '✓'; color: var(--green); }
+    .ai-tool-card.failed .ai-tool-status::after { content: '✗'; color: var(--red); }
+    .ai-tool-card.declined .ai-tool-status::after { content: '⊘'; color: var(--text-dim); }
+    .ai-tool-card.waiting { border-color: var(--yellow); }
+    .ai-tool-card.waiting .ai-tool-status::after { content: '?'; color: var(--yellow); font-weight: 700; }
+    .ai-tool-body {
+      padding: 6px 10px 8px;
       border-top: 1px solid var(--border);
     }
-    .ai-thinking-section { margin-bottom: 8px; }
-    .ai-thinking-section strong {
+    .ai-tool-section { margin-bottom: 6px; }
+    .ai-tool-section strong {
       display: block;
       font-size: 10px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
       color: var(--text-dim);
-      margin-bottom: 4px;
+      margin-bottom: 3px;
     }
-    .ai-thinking-pre {
+    .ai-tool-pre {
       font-family: 'Cascadia Code', 'Fira Code', monospace;
       font-size: 11px;
       white-space: pre-wrap;
-      word-break: break-all;
+      word-break: break-word;
       color: var(--text);
       margin: 0;
-      max-height: 300px;
+      max-height: 280px;
       overflow-y: auto;
     }
+    .ai-diff {
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 11px;
+      white-space: pre;
+      overflow: auto;
+      max-height: 340px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 0;
+      margin: 4px 0 6px;
+    }
+    .ai-diff div { padding: 0 8px; min-height: 15px; }
+    .ai-diff .add { background: rgba(63,185,80,0.15); color: var(--green); }
+    .ai-diff .del { background: rgba(248,81,73,0.15); color: var(--red); }
+    .ai-diff .hunk { color: var(--accent); }
+    .ai-diff .meta { color: var(--text-dim); }
+    .ai-approval { margin-top: 4px; }
+    .ai-approval-summary { color: var(--text); font-weight: 600; margin-bottom: 4px; }
+    .ai-approval-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    .ai-approval-actions .btn { font-size: 11px; padding: 3px 10px; }
+    .ai-approval-result { color: var(--text-dim); font-style: italic; }
+    .ai-msg-notice {
+      color: var(--text-dim);
+      font-size: 11px;
+      font-style: italic;
+      padding: 2px 0;
+    }
+    .ai-welcome { color: var(--text-dim); font-size: 11px; line-height: 1.6; }
+    .ai-welcome ul { margin: 4px 0 0 16px; padding: 0; }
+    .ai-settings-section {
+      border-top: 1px solid var(--border);
+      margin-top: 14px;
+      padding-top: 12px;
+    }
+    .ai-settings-section h4 { font-size: 12px; margin: 0 0 6px; color: var(--text); }
+    .ai-settings-label { font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px; }
+    .ai-settings-row { display: flex; gap: 6px; align-items: center; }
+    .ai-settings-row input { flex: 1; min-width: 0; }
+    .ai-settings-hint { font-size: 10px; color: var(--text-dim); margin-top: 3px; line-height: 1.5; }
+    .ai-settings-code {
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 10px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 6px 8px;
+      word-break: break-all;
+      white-space: pre-wrap;
+      margin: 4px 0;
+    }
+    .automation-item .auto-warning { color: var(--yellow); font-size: 11px; flex-shrink: 0; }
     .ai-copy-btn {
       position: absolute;
       top: 4px;
@@ -1149,6 +1224,199 @@
       font-style: italic;
       font-size: 10px;
     }
+
+    /* ─── Tests panel ───────────────────────────────── */
+    .bottom-panel.collapsed .tests-area,
+    .bottom-panel.collapsed .timeline-area { display: none !important; }
+    .panel-badge { font-size: 10px; margin-left: 4px; color: var(--red); }
+    .panel-badge.ok { color: var(--green); }
+    .tests-area, .timeline-area { flex: 1; display: flex; overflow: hidden; min-height: 0; }
+    .tests-list {
+      width: 220px; flex-shrink: 0; border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .tests-list-header { display: flex; gap: 4px; padding: 6px; border-bottom: 1px solid var(--border); }
+    .tests-list-header .btn { flex: 1; padding: 3px 6px; }
+    .tests-list-body { flex: 1; overflow-y: auto; padding: 4px 0; }
+    .tests-group { padding: 6px 10px 2px; font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tests-item {
+      display: flex; align-items: center; gap: 6px; padding: 3px 10px; cursor: pointer; font-size: 12px;
+    }
+    .tests-item:hover { background: var(--bg-secondary); }
+    .tests-item.selected { background: var(--bg-input); }
+    .tests-item .tests-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tests-item .tests-run { opacity: 0; background: none; border: none; color: var(--accent); cursor: pointer; font-size: 11px; }
+    .tests-item:hover .tests-run, body.is-tablet .tests-item .tests-run { opacity: 1; }
+    .test-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--text-dim); opacity: 0.5; }
+    .test-dot.passed { background: var(--green); opacity: 1; }
+    .test-dot.failed { background: var(--red); opacity: 1; }
+    .test-dot.running { background: var(--accent); opacity: 1; animation: tae-pulse 0.8s infinite alternate; }
+    @keyframes tae-pulse { from { opacity: 0.3; } to { opacity: 1; } }
+    .tests-empty { padding: 16px; color: var(--text-dim); font-size: 12px; line-height: 1.6; }
+
+    .tests-editor { flex: 1; min-width: 0; overflow-y: auto; padding: 8px 12px; font-size: 12px; }
+    .tests-toolbar { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+    .tests-toolbar .tests-title {
+      flex: 1; min-width: 160px; background: transparent; border: 1px solid transparent; color: var(--text);
+      font-family: inherit; font-size: 13px; font-weight: 600; padding: 3px 6px; border-radius: 4px; outline: none;
+    }
+    .tests-toolbar .tests-title:hover, .tests-toolbar .tests-title:focus { border-color: var(--border); background: var(--bg-input); }
+    .tests-dirty { color: var(--yellow); font-size: 11px; }
+    .tests-settings { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 10px; color: var(--text-dim); }
+    .tests-settings label { display: flex; align-items: center; gap: 6px; }
+    .tests-settings label.live-on { color: var(--orange); }
+    .tests-live-tag { font-size: 9px; font-weight: 600; color: var(--orange); border: 1px solid var(--orange); border-radius: 3px; padding: 0 3px; line-height: 13px; flex-shrink: 0; }
+    .tests-input, .tests-select {
+      background: var(--bg-input); color: var(--text); border: 1px solid var(--border); border-radius: 3px;
+      padding: 3px 6px; font-family: inherit; font-size: 12px; outline: none; min-width: 0;
+    }
+    .tests-input:focus, .tests-select:focus { border-color: var(--accent); }
+    .tests-input.invalid { border-color: var(--red); }
+    .tests-input.entity { width: 240px; }
+    .tests-input.state { width: 100px; }
+    .tests-input.attributes { width: 90px; color: var(--text-dim); transition: width 0.15s; }
+    .tests-input.attributes:focus { width: 260px; color: var(--text); }
+    .tests-input.seconds { width: 70px; }
+    .tests-input.service { width: 170px; }
+    .tests-row > .tests-select { width: 160px; }
+    .tests-section { margin: 10px 0 4px; display: flex; align-items: center; gap: 8px; color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .tests-section .btn { padding: 1px 8px; font-size: 10px; text-transform: none; letter-spacing: 0; }
+    .tests-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+    .tests-chip {
+      border: 1px solid var(--border); border-radius: 10px; padding: 1px 8px; cursor: pointer; font-size: 11px; color: var(--text-dim);
+      background: transparent; font-family: inherit;
+    }
+    .tests-chip.on { border-color: var(--accent); color: var(--text); background: rgba(88, 166, 255, 0.12); }
+    .tests-row { display: flex; align-items: flex-start; gap: 6px; padding: 3px 4px; border-radius: 4px; }
+    .tests-row > * { flex-shrink: 0; }
+    .tests-row .step-index, .tests-row .step-result { line-height: 24px; }
+    .row-fields { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: 1 1 auto !important; min-width: 0; }
+    .tests-row:hover { background: var(--bg-secondary); }
+    .tests-row.highlight { background: rgba(88, 166, 255, 0.15); }
+    .tests-row .step-index { width: 18px; text-align: right; color: var(--text-dim); font-size: 11px; flex-shrink: 0; }
+    .tests-row .step-result { width: 14px; flex-shrink: 0; text-align: center; }
+    .tests-row .step-result.passed { color: var(--green); }
+    .tests-row .step-result.failed { color: var(--red); }
+    .tests-row .row-actions { margin-left: auto; display: flex; gap: 2px; opacity: 0.4; line-height: 24px; }
+    .tests-row:hover .row-actions { opacity: 1; }
+    .row-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 12px; padding: 0 4px; font-family: inherit; }
+    .row-btn:hover { color: var(--text); }
+    .row-btn.danger:hover { color: var(--red); }
+    .tests-hint { color: var(--text-dim); font-size: 11px; }
+
+    .tests-result {
+      width: 32%; min-width: 220px; max-width: 75%; flex-shrink: 0; border-left: 1px solid var(--border); overflow-y: auto; font-size: 12px;
+    }
+    .suggest-popup {
+      display: none; position: fixed; z-index: 400; overflow-y: auto; padding: 4px 0;
+      background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.45);
+    }
+    .suggest-popup.active { display: block; }
+    .suggest-popup .ac-item { padding: 3px 10px; }
+    .suggest-popup .ac-label { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .suggest-popup .ac-label b { color: var(--accent); font-weight: 600; }
+    .suggest-popup .ac-name { flex: 1; min-width: 0; color: var(--text-dim); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .suggest-popup .ac-hint { flex-shrink: 0; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .suggest-empty { padding: 4px 10px; color: var(--text-dim); font-size: 11px; }
+    .tests-result-header { padding: 8px 12px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); }
+    .tests-verdict { font-weight: 600; font-size: 13px; }
+    .tests-verdict.passed { color: var(--green); }
+    .tests-verdict.failed { color: var(--red); }
+    .tests-meta { color: var(--text-dim); font-size: 11px; margin-top: 2px; }
+    .tests-error { color: var(--red); margin-top: 4px; white-space: pre-wrap; }
+    .timeline-item { display: flex; gap: 8px; padding: 2px 12px; line-height: 1.5; cursor: default; }
+    .timeline-item[data-step] { cursor: pointer; }
+    .timeline-item:hover { background: var(--bg-secondary); }
+    .timeline-item .t-time { color: var(--text-dim); font-size: 11px; width: 52px; flex-shrink: 0; text-align: right; }
+    .timeline-item .t-icon { width: 14px; flex-shrink: 0; text-align: center; }
+    .timeline-item .t-text { flex: 1; min-width: 0; word-break: break-word; white-space: pre-wrap; }
+    .timeline-item .t-who { color: var(--purple); font-size: 11px; flex-shrink: 0; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .timeline-item .t-detail { color: var(--text-dim); font-size: 11px; }
+    .timeline-item.k-step .t-text { color: var(--accent); }
+    .timeline-item.k-service .t-text { color: var(--text); font-weight: 600; }
+    .timeline-item.k-effect .t-text, .timeline-item.k-info .t-text { color: var(--text-dim); }
+    .timeline-item.k-error .t-text, .timeline-item.k-network .t-text { color: var(--red); }
+    .timeline-item.k-expect.passed .t-text { color: var(--green); }
+    .timeline-item.k-expect.failed .t-text { color: var(--red); font-weight: 600; }
+    .timeline-item.l-warn .t-text { color: var(--yellow); }
+    .timeline-item.l-error .t-text { color: var(--red); }
+    .timeline-item.l-debug .t-text { color: var(--text-dim); }
+
+    /* ─── Timeline panel ────────────────────────────── */
+    .timeline-automations { width: 220px; flex-shrink: 0; border-right: 1px solid var(--border); overflow-y: auto; padding: 4px 0; }
+    .timeline-auto { display: flex; align-items: center; gap: 6px; padding: 3px 10px; cursor: pointer; font-size: 12px; }
+    .timeline-auto:hover { background: var(--bg-secondary); }
+    .timeline-auto.selected { background: var(--bg-input); }
+    .timeline-auto .ta-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .timeline-auto .ta-count { color: var(--text-dim); font-size: 10px; }
+    .timeline-auto .ta-errors { color: var(--red); font-size: 10px; }
+    .timeline-runs { flex: 1; min-width: 0; overflow-y: auto; font-size: 12px; }
+    .timeline-runs-header { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--border); color: var(--text-dim); font-size: 11px; position: sticky; top: 0; background: var(--bg); }
+    .run-row { border-bottom: 1px solid var(--bg-tertiary); }
+    .run-summary { display: flex; align-items: center; gap: 8px; padding: 3px 12px; cursor: pointer; }
+    .run-summary:hover { background: var(--bg-secondary); }
+    .run-summary .r-caret { color: var(--text-dim); width: 10px; font-size: 10px; }
+    .run-summary .r-time { color: var(--text-dim); font-size: 11px; flex-shrink: 0; }
+    .run-summary .r-auto { color: var(--purple); font-size: 11px; flex-shrink: 0; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .run-summary .r-trigger { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .run-chip { font-size: 10px; border-radius: 8px; padding: 0 6px; border: 1px solid var(--border); color: var(--text-dim); flex-shrink: 0; }
+    .run-chip.calls { color: var(--accent); border-color: rgba(88, 166, 255, 0.4); }
+    .run-chip.error { color: var(--red); border-color: rgba(248, 81, 73, 0.4); }
+    .run-actions { padding: 2px 0 6px 30px; }
+    .run-action { display: flex; gap: 8px; line-height: 1.5; padding-right: 12px; }
+    .run-action .ra-at { color: var(--text-dim); font-size: 11px; width: 56px; flex-shrink: 0; text-align: right; }
+    .run-action .ra-text { flex: 1; min-width: 0; word-break: break-word; white-space: pre-wrap; }
+    .run-action.service .ra-text { font-weight: 600; }
+    .run-action.error .ra-text, .run-action .failed { color: var(--red); }
+    .run-action.log.warn .ra-text { color: var(--yellow); }
+    .run-action.log.debug .ra-text { color: var(--text-dim); }
+    .timeline-ignored { padding: 8px 12px; color: var(--text-dim); font-size: 11px; }
+
+    /* ─── File history ──────────────────────────────── */
+    .dialog.history-dialog { width: min(1200px, 94vw); max-width: none; height: min(760px, 88vh); display: flex; flex-direction: column; padding: 14px; }
+    .history-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .history-header h3 { margin: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .history-body { flex: 1; display: flex; gap: 10px; min-height: 0; }
+    .history-list { width: 300px; flex-shrink: 0; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; }
+    .history-item { padding: 6px 10px; cursor: pointer; border-bottom: 1px solid var(--bg-tertiary); font-size: 12px; }
+    .history-item:hover { background: var(--bg-input); }
+    .history-item.selected { background: rgba(88, 166, 255, 0.15); }
+    .history-item .h-path { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .history-item .h-meta { color: var(--text-dim); font-size: 11px; display: flex; flex-wrap: wrap; gap: 2px 6px; align-items: center; white-space: nowrap; }
+    .source-tag { font-size: 10px; border-radius: 8px; padding: 0 6px; border: 1px solid var(--border); white-space: nowrap; }
+    .source-tag.ai-chat, .source-tag.mcp { color: var(--purple); border-color: rgba(188, 140, 255, 0.4); }
+    .source-tag.editor { color: var(--accent); border-color: rgba(88, 166, 255, 0.4); }
+    .source-tag.deleted { color: var(--red); border-color: rgba(248, 81, 73, 0.4); }
+    .source-tag.restore { color: var(--green); border-color: rgba(63, 185, 80, 0.4); }
+    .history-diff-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+    .history-diff-toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--border); background: var(--bg-tertiary); font-size: 11px; color: var(--text-dim); flex-wrap: wrap; }
+    .history-diff-toolbar .spacer { flex: 1; }
+    .history-diff { flex: 1; min-height: 0; }
+    .history-empty { padding: 20px; color: var(--text-dim); text-align: center; }
+
+    /* ─── Chat mentions and cost ────────────────────── */
+    .ai-mention { color: var(--accent); background: rgba(88, 166, 255, 0.12); border-radius: 3px; padding: 0 2px; }
+    .ai-mention-popup {
+      display: none; position: absolute; bottom: 100%; left: 8px; right: 8px; max-height: 240px; overflow-y: auto;
+      background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 -4px 16px rgba(0,0,0,0.4); z-index: 20;
+    }
+    .ai-mention-popup.active { display: block; }
+    .ai-mention-item { padding: 4px 10px; cursor: pointer; font-size: 12px; display: flex; gap: 8px; align-items: baseline; }
+    .ai-mention-item.selected, .ai-mention-item:hover { background: var(--bg-input); }
+    .ai-mention-item .m-kind { color: var(--text-dim); font-size: 10px; width: 36px; flex-shrink: 0; }
+    .ai-mention-item .m-name { color: var(--text-dim); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .auto-timeline { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 12px; padding: 0 2px; }
+    .auto-timeline:hover { color: var(--accent); }
+
+    @media (max-width: 900px) {
+      .tests-area { flex-direction: column; overflow-y: auto; }
+      .tests-list, .tests-result, .timeline-automations { width: auto; border-right: none; border-left: none; border-bottom: 1px solid var(--border); max-height: 40%; }
+      .tests-result { min-width: 0; max-width: none; width: auto !important; }
+      .tests-result-resize { display: none; }
+      .timeline-area { flex-direction: column; }
+      .history-body { flex-direction: column; }
+      .history-list { width: auto; max-height: 30%; }
+    }
   </style>
 </head>
 <body>
@@ -1164,6 +1432,7 @@
       <button class="btn" onclick="showExportDialog()">Export</button>
       <button class="btn" onclick="showYamlToTsDialog()" title="Convert YAML attributes to TypeScript interface">YAML→TS</button>
       <button class="btn" onclick="showImportDialog()">Import</button>
+      <button class="btn" onclick="openFileHistory()" title="Every saved version of the open file (saves, AI edits, imports)">🕘 History</button>
       <button class="btn" onclick="showHelpPanel()" title="Keyboard shortcuts & help">Help</button>
       <button class="btn btn-accent" onclick="toggleAiChat()" id="aiChatBtn" title="AI Chat (Ctrl+Shift+I)">🤖 AI</button>
       <button class="btn btn-reload" onclick="reload()" id="reloadBtn">⟳ Reload</button>
@@ -1195,6 +1464,7 @@
           <div style="display:flex; gap:4px;">
             <button class="btn" style="padding: 1px 6px; font-size: 10px;" onclick="createNewFile()" title="New File">+📄</button>
             <button class="btn" style="padding: 1px 6px; font-size: 10px;" onclick="createNewFolder()" title="New Folder">+📁</button>
+            <button class="btn" style="padding: 1px 6px; font-size: 10px;" onclick="openFileHistory(null)" title="Recent changes in all files (restore deleted files here)">🕘</button>
             <button class="btn" style="padding: 1px 6px; font-size: 10px;" onclick="refreshFiles()">↻</button>
           </div>
         </div>
@@ -1240,6 +1510,8 @@
           <div class="panel-tabs">
             <div class="panel-tab active" data-panel="logs" onclick="switchPanel('logs')">Output</div>
             <div class="panel-tab" data-panel="terminal" onclick="switchPanel('terminal')">Terminal</div>
+            <div class="panel-tab" data-panel="tests" onclick="switchPanel('tests')" title="Simulated test runs of your automations">Tests<span class="panel-badge" id="testsBadge"></span></div>
+            <div class="panel-tab" data-panel="timeline" onclick="switchPanel('timeline')" title="What each automation did, run by run">Timeline</div>
           </div>
           <div class="log-filters" id="logFilters">
             <button class="autoscroll-btn active" id="autoscrollBtn" onclick="toggleAutoScroll()" title="Auto-scroll to latest log">⤓ Auto</button>
@@ -1269,11 +1541,28 @@
             <div class="autocomplete-popup" id="autocompletePopup"></div>
           </div>
         </div>
+        <div class="tests-area" id="testsArea" style="display:none;">
+          <div class="tests-list">
+            <div class="tests-list-header">
+              <button class="btn btn-accent" onclick="newTestScenario()">+ New test</button>
+              <button class="btn" onclick="runTestsForFile()" title="Run every test of the open file (tests that send calls to Home Assistant only run on their own)">▶ This file</button>
+            </div>
+            <div class="tests-list-body" id="testsListBody"></div>
+          </div>
+          <div class="tests-editor" id="testsEditor"></div>
+          <div class="tests-result-resize"><div class="col-resize" id="testsResultResize" title="Drag to resize"></div></div>
+          <div class="tests-result" id="testsResult"></div>
+        </div>
+        <div class="timeline-area" id="timelineArea" style="display:none;">
+          <div class="timeline-automations" id="timelineAutomations"></div>
+          <div class="timeline-runs" id="timelineRuns"></div>
+        </div>
       </div>
     </div>
 
     <!-- AI Chat Sidebar -->
     <div class="ai-sidebar" id="aiSidebar">
+      <div class="col-resize" id="aiSidebarResize" title="Drag to resize"></div>
       <div class="ai-sidebar-header">
         <h2>🤖 AI Chat</h2>
         <span class="ai-context-label"><span class="ai-status-dot" id="aiStatusDot"></span> <span id="aiStatusLabel">Not configured</span></span>
@@ -1307,9 +1596,11 @@
       </div>
       <div class="ai-input-area">
         <div class="ai-context-label" id="aiContextInfo">Context: current file</div>
-        <div class="ai-input-row">
-          <textarea class="ai-input" id="aiInput" placeholder="Ask AI..." rows="1"
-                    onkeydown="handleAiInputKey(event)" oninput="autoResizeAiInput()"></textarea>
+        <div class="ai-input-row" style="position: relative;">
+          <div class="ai-mention-popup" id="aiMentionPopup"></div>
+          <textarea class="ai-input" id="aiInput" placeholder="Ask AI… (@ adds a file or entity)" rows="1"
+                    onkeydown="handleAiInputKey(event)" oninput="autoResizeAiInput(); updateAiMentionPopup()"
+                    onblur="setTimeout(hideAiMentionPopup, 150)"></textarea>
           <button class="ai-send-btn" id="aiSendBtn" onclick="sendAiChat()">Send</button>
         </div>
       </div>
@@ -1466,36 +1757,91 @@ supported_features: 40"></textarea>
 
   <!-- AI Settings dialog -->
   <div class="dialog-overlay" id="aiSettingsDialog">
-    <div class="dialog" style="min-width: 480px;">
+    <div class="dialog" style="min-width: 480px; max-width: 560px; max-height: 90vh; overflow-y: auto;">
       <h3>🤖 AI Settings</h3>
-      <p>Configure the AI provider for inline completions and chat. Settings are saved in the addon config, but you can override them here for this session.</p>
+      <p>Used by the AI chat and inline completions. Saved in TAE (overriding the add-on configuration) and kept across restarts.</p>
       <div style="margin-bottom: 12px;">
-        <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;">Provider</label>
+        <label class="ai-settings-label">Provider</label>
         <select id="aiSettProvider" onchange="updateAiProviderHelp()" style="width: 100%; background: var(--bg-input); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 4px; font-family: inherit; font-size: 12px;">
           <option value="none">None (disabled)</option>
-          <option value="github">GitHub Models</option>
+          <option value="anthropic">Anthropic (Claude)</option>
           <option value="openai">OpenAI</option>
-          <option value="anthropic">Anthropic</option>
+          <option value="github">GitHub Models</option>
           <option value="deepseek">DeepSeek</option>
         </select>
       </div>
       <div id="aiProviderHelp" class="ai-provider-help" style="display:none;"></div>
       <div style="margin-bottom: 12px;">
-        <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;">API Key</label>
-        <input type="password" id="aiSettApiKey" style="width: 100%; background: var(--bg-input); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 4px; font-family: inherit; font-size: 12px; outline: none;" placeholder="GitHub PAT, OpenAI key, Anthropic key, or DeepSeek key" />
+        <label class="ai-settings-label">API Key</label>
+        <input type="password" id="aiSettApiKey" autocomplete="off" style="width: 100%; background: var(--bg-input); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 4px; font-family: inherit; font-size: 12px; outline: none;" placeholder="Paste the provider's API key" />
+        <div class="ai-settings-hint" id="aiSettKeyHint"></div>
       </div>
       <div style="margin-bottom: 12px;">
-        <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;">Chat Model</label>
-        <input type="text" id="aiSettModel" placeholder="e.g. claude-sonnet-4-20250514, gpt-4o" />
+        <label class="ai-settings-label">Chat model</label>
+        <div class="ai-settings-row">
+          <input type="text" id="aiSettModel" list="aiModelList" />
+          <button class="btn" onclick="loadAiModels()" id="aiLoadModelsBtn" title="Ask the provider which models this key can use">Load models</button>
+        </div>
+        <datalist id="aiModelList"></datalist>
+        <div class="ai-settings-hint" id="aiModelsHint">Leave empty to use the default shown.</div>
       </div>
       <div style="margin-bottom: 12px;">
-        <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;">Completion Model <span style="font-size: 10px;">(optional — uses chat model if empty)</span></label>
-        <input type="text" id="aiSettCompletionModel" placeholder="e.g. gpt-4o-mini (faster for inline)" />
+        <label class="ai-settings-label">Inline completion model <span style="font-size: 10px;">(a fast, cheap model)</span></label>
+        <input type="text" id="aiSettCompletionModel" list="aiModelList" />
       </div>
-      <div id="aiSettStatus" style="font-size: 11px; margin-bottom: 12px;"></div>
+      <div class="ai-settings-row" style="margin-bottom: 4px;">
+        <div style="flex: 1;">
+          <label class="ai-settings-label">Chat effort</label>
+          <select id="aiSettChatEffort" style="width: 100%; background: var(--bg-input); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 4px; font-family: inherit; font-size: 12px;">
+            <option value="">Model default</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="xhigh">Extra high</option>
+            <option value="max">Max</option>
+          </select>
+        </div>
+        <div style="flex: 1;">
+          <label class="ai-settings-label">Inline completion effort</label>
+          <select id="aiSettCompletionEffort" style="width: 100%; background: var(--bg-input); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 4px; font-family: inherit; font-size: 12px;">
+            <option value="">Model default</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="xhigh">Extra high</option>
+            <option value="max">Max</option>
+          </select>
+        </div>
+      </div>
+      <div class="ai-settings-hint" id="aiEffortHint" style="margin-bottom: 12px;"></div>
+      <div id="aiSettStatus" style="font-size: 11px; margin-bottom: 4px;"></div>
+
+      <div class="ai-settings-section">
+        <h4>MCP server: TAE's tools for Claude Code and other AI apps</h4>
+        <div id="mcpInfo" class="ai-settings-hint">Loading…</div>
+      </div>
+
       <div class="dialog-actions">
         <button class="btn" onclick="closeAiSettingsDialog()">Cancel</button>
         <button class="btn btn-accent" onclick="saveAiSettings()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- File history dialog -->
+  <div class="dialog-overlay" id="historyDialog" onclick="if (event.target === this) closeHistoryDialog()">
+    <div class="dialog history-dialog">
+      <div class="history-header">
+        <h3 id="historyTitle">History</h3>
+        <button class="btn" onclick="openFileHistory(null)" title="Changes across all files">All files</button>
+        <button class="btn" onclick="closeHistoryDialog()">✕</button>
+      </div>
+      <div class="history-body">
+        <div class="history-list" id="historyList"></div>
+        <div class="history-diff-wrap">
+          <div class="history-diff-toolbar" id="historyDiffToolbar"></div>
+          <div class="history-diff" id="historyDiff"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -1523,23 +1869,24 @@ supported_features: 40"></textarea>
     let autoScrollLocked = true;
     let storageRefreshTimer = null;
     let aiChatOpen = false;
-    let aiChatMessages = []; // { role: 'user'|'assistant', content: string }
-    let aiSessionHistory = []; // { title, messages, timestamp } — last 10 sessions
-    let aiStreaming = false;
-    let aiStreamingContent = '';
-    let aiConfig = { provider: 'none', model: '', completionModel: '', configured: false };
+    let aiSessionId = newAiSessionId();
+    let aiTranscript = [];       // { role: 'user'|'assistant', content } of the current chat
+    let aiSessionHistory = [];   // { title, sessionId, html, messages, timestamp }, last 10 chats
+    let aiBusy = false;
+    let aiTextBubble = null;     // { element, text } of the reply being streamed
+    let aiRenderPending = false;
+    let aiToolCards = new Map(); // tool use id -> card element
+    let aiConfig = { provider: 'none', model: '', completionModel: '', configured: false, defaults: {} };
     let aiCompletionId = 0;
     let aiCompletionResolve = null;
     let aiSkillMdCache = null;
+    let mcpInfoCache = null;
+    let mcpTokenVisible = false;
     let loadedSnippets = []; // { name, description, activation, code }
     let serverSyncPath = '/share/tae';
     let automationClassMap = new Map(); // automationId -> { file, line, className }
     let expandedFolders = new Set();    // persisted across renders (paths)
     let cachedAllEntityStates = [];     // full HAEntityState[] from last all_entities response
-    let cachedDeviceRegistry = null;    // { devices: [], entityRegistry: [], areas: [] } from HA registries
-    let aiAgentPassState = 0;           // 0=normal, 1=waiting for pass-1 entity probe, 2=in pass-2
-    let aiAgentUserMessages = [];       // preserved full conversation for pass-2 re-send
-    let aiAgentSystemContext = '';      // preserved base system context for pass-2 enrichment
     const isTabletSize = () => window.matchMedia('(max-width: 900px), (pointer: coarse)').matches;
 
     // ─── WebSocket ──────────────────────────────────
@@ -1556,9 +1903,11 @@ supported_features: 40"></textarea>
         ws.send(JSON.stringify({ type: 'get_logs', count: 1000 }));
         ws.send(JSON.stringify({ type: 'get_files' }));
         ws.send(JSON.stringify({ type: 'get_all_entities' }));
-        ws.send(JSON.stringify({ type: 'get_device_registry' }));
         ws.send(JSON.stringify({ type: 'get_storage' }));
         ws.send(JSON.stringify({ type: 'ai_get_config' }));
+        ws.send(JSON.stringify({ type: 'get_entity_index' }));
+        ws.send(JSON.stringify({ type: 'get_traces' }));
+        ws.send(JSON.stringify({ type: 'test_list' }));
         startStoragePolling();
       };
 
@@ -1570,6 +1919,11 @@ supported_features: 40"></textarea>
       ws.onclose = () => {
         connected = false;
         updateStatus(false);
+        if (aiBusy) {
+          resetAiStreamingState();
+          appendAiNotice('Connection lost, so the AI request was stopped.');
+          setAiBusy(false);
+        }
         setTimeout(connectWS, 3000);
       };
 
@@ -1595,6 +1949,7 @@ supported_features: 40"></textarea>
         case 'automations':
           automations = msg.data || [];
           renderAutomations();
+          scheduleTimelineRender();
           break;
         case 'logs':
           allLogs = msg.data || [];
@@ -1668,9 +2023,6 @@ supported_features: 40"></textarea>
             handleEntitiesDownload(msg.data || []);
           }
           break;
-        case 'device_registry':
-          cachedDeviceRegistry = msg.data || null;
-          break;
         case 'skill_file':
           aiSkillMdCache = msg.data || null;
           if (pendingSkillDownload) {
@@ -1693,6 +2045,7 @@ supported_features: 40"></textarea>
         case 'ai_config':
           aiConfig = msg.data || aiConfig;
           updateAiStatus();
+          if (document.getElementById('aiSettingsDialog').classList.contains('active')) updateAiProviderHelp();
           break;
         case 'ai_completion':
           if (aiCompletionResolve && msg.id === aiCompletionId) {
@@ -1700,15 +2053,53 @@ supported_features: 40"></textarea>
             aiCompletionResolve = null;
           }
           break;
-        case 'ai_chat_chunk':
-          aiStreamingContent += msg.text || '';
-          updateAiStreamingMessage();
+        case 'ai_event':
+          handleAiEvent(msg.sessionId, msg.event);
           break;
-        case 'ai_chat_done':
-          finalizeAiStreaming(msg.usage || null);
+        case 'ai_models':
+          handleAiModels(msg);
           break;
-        case 'ai_chat_error':
-          handleAiChatError(msg.error || 'Unknown error');
+        case 'mcp_info':
+          if (msg.data) renderMcpInfo(msg.data);
+          break;
+        case 'file_changed':
+          applyExternalFileChange(msg);
+          break;
+        case 'entity_index':
+          handleEntityIndex(msg);
+          break;
+        case 'entity_state':
+          handleEntityState(msg);
+          break;
+        case 'traces':
+          handleTraces(msg.data);
+          break;
+        case 'trace_update':
+          handleTraceUpdate(msg);
+          break;
+        case 'tests':
+          handleTests(msg.data);
+          break;
+        case 'test_saved':
+          handleTestSaved(msg);
+          break;
+        case 'test_error':
+          handleTestError(msg);
+          break;
+        case 'test_started':
+          handleTestStarted(msg);
+          break;
+        case 'test_result':
+          handleTestResult(msg);
+          break;
+        case 'file_history':
+          handleFileHistory(msg);
+          break;
+        case 'file_version':
+          handleFileVersion(msg);
+          break;
+        case 'history_restored':
+          handleHistoryRestored(msg);
           break;
         case 'error':
           addLocalLog('error', 'ui', msg.message);
@@ -1740,20 +2131,29 @@ supported_features: 40"></textarea>
         return;
       }
 
-      list.innerHTML = automations.map(a => `
-        <div class="automation-item" title="${a.id} (${a.className})\nClick to jump to class\nState: ${a.state}${a.error ? '\nError: ' + a.error : ''}"
-             onclick="jumpToAutomationClass('${escapeAttr(a.id)}', '${escapeAttr(a.className)}')">
-          <div class="state-indicator ${a.state}"></div>
-          <span class="auto-name">${a.id}</span>
-          <span class="auto-state">${a.state}</span>
-          <div class="auto-actions" onclick="event.stopPropagation()">
-            ${a.state === 'running'
-              ? `<button class="btn" onclick="stopAuto('${a.id}')">Stop</button>`
-              : `<button class="btn btn-accent" onclick="startAuto('${a.id}')">Start</button>`
-            }
-          </div>
-        </div>
-      `).join('');
+      list.innerHTML = automations.map(automation => {
+        const tooltip = [automation.id + ' (' + automation.className + ')', 'Click to jump to class', 'State: ' + automation.state];
+        if (automation.error) tooltip.push('Error: ' + automation.error);
+        let warning = '';
+        if (automation.lastError) {
+          const when = automation.lastErrorAt ? new Date(automation.lastErrorAt).toLocaleString() : '';
+          const detail = 'Callback error (' + (automation.errorCount || 1) + '×, last ' + when + '): ' + automation.lastError;
+          tooltip.push(detail);
+          warning = '<span class="auto-warning" title="' + escapeHtml(detail + '\nThe automation keeps running.') + '">⚠</span>';
+        }
+        const action = '<button class="auto-timeline" title="Timeline: what this automation did" onclick="openTimelineFor(this.closest(\'.automation-item\').dataset.id)">⏱</button>' +
+          (automation.state === 'running'
+            ? '<button class="btn" onclick="stopAuto(this.closest(\'.automation-item\').dataset.id)">Stop</button>'
+            : '<button class="btn btn-accent" onclick="startAuto(this.closest(\'.automation-item\').dataset.id)">Start</button>');
+        return '<div class="automation-item" title="' + escapeHtml(tooltip.join('\n')) + '"' +
+            ' data-id="' + escapeHtml(automation.id) + '" data-class="' + escapeHtml(automation.className) + '"' +
+            ' onclick="jumpToAutomationClass(this.dataset.id, this.dataset.class)">' +
+          '<div class="state-indicator ' + escapeHtml(automation.state) + '"></div>' +
+          '<span class="auto-name">' + escapeHtml(automation.id) + '</span>' + warning +
+          '<span class="auto-state">' + escapeHtml(automation.state) + '</span>' +
+          '<div class="auto-actions" onclick="event.stopPropagation()">' + action + '</div>' +
+        '</div>';
+      }).join('');
     }
 
     function startAuto(id) {
@@ -2078,6 +2478,13 @@ supported_features: 40"></textarea>
         if (document.getElementById('helpDialog').classList.contains('active')) { closeHelpPanel(); return; }
         if (document.getElementById('storageEditDialog').classList.contains('active')) { closeStorageEditDialog(); return; }
         if (document.getElementById('aiSettingsDialog').classList.contains('active')) { closeAiSettingsDialog(); return; }
+        if (document.getElementById('historyDialog').classList.contains('active')) { closeHistoryDialog(); return; }
+      }
+      // Ctrl+S inside the test editor saves the test
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 's' && document.activeElement && document.activeElement.closest('#testsArea')) {
+        e.preventDefault();
+        saveCurrentTest();
+        return;
       }
       // Ctrl+Shift+I: toggle AI chat
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'I') {
@@ -2174,8 +2581,10 @@ supported_features: 40"></textarea>
         }
         model.onDidChangeContent(() => {
           markTabModified(filePath);
+          scheduleEntityMarkers(model);
         });
         openTabs.set(filePath, { content, model, modified: false, viewState: null });
+        updateEntityMarkers(model);
       }
 
       switchToTab(filePath);
@@ -2260,6 +2669,8 @@ supported_features: 40"></textarea>
     }
 
     function renderTabs() {
+      updateAiContextInfo();
+      if (activePanel === 'tests') renderTestsList();
       const bar = document.getElementById('tabBar');
       bar.innerHTML = Array.from(openTabs.entries()).map(([path, info]) => {
         const name = path.split('/').pop();
@@ -2384,6 +2795,8 @@ supported_features: 40"></textarea>
           padding: { top: 8 },
         });
 
+        monacoEditor.onDidChangeCursorSelection(() => updateAiContextInfo());
+
         // Ctrl+S to save
         monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
           saveCurrentFile();
@@ -2458,6 +2871,9 @@ supported_features: 40"></textarea>
 
         // Register snippet completions
         registerSnippetCompletions();
+
+        // Entity ids: autocomplete, hover, typo warnings
+        registerEntityProviders();
 
         // Fetch SKILL.md for AI context
         send({ type: 'get_skill_file' });
@@ -2581,16 +2997,26 @@ supported_features: 40"></textarea>
 
     function rebuildAutomationClassMap(files) {
       automationClassMap.clear();
-      // Match: class FooBar extends Automation
-      const re = /class\s+([A-Za-z_$][\w$]*)\s+extends\s+Automation\b/g;
-      for (const f of files) {
-        if (!f.path.endsWith('.ts')) continue;
-        const lines = (f.content || '').split('\n');
-        for (let i = 0; i < lines.length; i++) {
-          const m = re.exec(lines[i]);
-          re.lastIndex = 0;
-          if (m) {
-            automationClassMap.set(m[1], { file: f.path, line: i + 1, className: m[1] });
+      // Every "class Foo extends Bar"; automation classes extend Automation directly or through another automation class
+      const pattern = /class\s+([A-Za-z_$][\w$]*)\s+extends\s+([A-Za-z_$][\w$]*)/;
+      const declarations = [];
+      for (const file of files) {
+        if (!file.path.endsWith('.ts')) continue;
+        const lines = (file.content || '').split('\n');
+        for (let iLine = 0; iLine < lines.length; iLine++) {
+          const match = pattern.exec(lines[iLine]);
+          if (match) declarations.push({ className: match[1], base: match[2], file: file.path, line: iLine + 1 });
+        }
+      }
+      const automationClasses = new Set(['Automation']);
+      let added = true;
+      while (added) {
+        added = false;
+        for (const declaration of declarations) {
+          if (automationClasses.has(declaration.base) && !automationClasses.has(declaration.className)) {
+            automationClasses.add(declaration.className);
+            automationClassMap.set(declaration.className, { file: declaration.file, line: declaration.line, className: declaration.className });
+            added = true;
           }
         }
       }
@@ -3183,7 +3609,19 @@ supported_features: 40"></textarea>
       });
       document.getElementById('logArea').style.display = panel === 'logs' ? '' : 'none';
       document.getElementById('terminalArea').style.display = panel === 'terminal' ? 'flex' : 'none';
+      document.getElementById('testsArea').style.display = panel === 'tests' ? 'flex' : 'none';
+      document.getElementById('timelineArea').style.display = panel === 'timeline' ? 'flex' : 'none';
       document.getElementById('logFilters').style.display = panel === 'logs' ? '' : 'none';
+      if (panel === 'tests') {
+        ensureBottomPanelHeight(TEST_PANEL_MIN_HEIGHT);
+        renderTestsList();
+        renderTestEditor();
+        renderTestResult();
+      }
+      if (panel === 'timeline') {
+        ensureBottomPanelHeight(TIMELINE_PANEL_MIN_HEIGHT);
+        renderTimeline();
+      }
       if (panel === 'terminal') {
         document.getElementById('terminalInput').focus();
         // Request entities for autocomplete if not loaded
@@ -3764,6 +4202,10 @@ supported_features: 40"></textarea>
     setupResize();
     setupSidebarResize();
     setupHorizontalSidebarResize();
+    window.addEventListener('DOMContentLoaded', () => { //< after the whole script, so later constants exist
+      setupRightPaneResize();
+      setupTestSuggest();
+    });
     setupLogScrollDetection();
     restoreSession();
     restoreUiPreferences();
@@ -4063,6 +4505,69 @@ supported_features: 40"></textarea>
       }
     }
 
+    // ─── Right-hand panes: drag their left edge ──────
+    const AI_SIDEBAR_MIN_WIDTH = 300;
+    const TESTS_RESULT_MIN_WIDTH = 220;
+    const RIGHT_PANE_MAX_SHARE = 0.75; //< of the window / of the tests area
+
+    function setupRightPaneResize() {
+      const aiSidebar = document.getElementById('aiSidebar');
+      setupLeftEdgeResize(document.getElementById('aiSidebarResize'), aiSidebar, {
+        storageKey: 'tae_ai_sidebar_width',
+        min: AI_SIDEBAR_MIN_WIDTH,
+        max: () => window.innerWidth * RIGHT_PANE_MAX_SHARE,
+        apply: width => aiSidebar.style.setProperty('--ai-sidebar-width', width + 'px'),
+      });
+      const testsResult = document.getElementById('testsResult');
+      setupLeftEdgeResize(document.getElementById('testsResultResize'), testsResult, {
+        storageKey: 'tae_tests_result_width',
+        min: TESTS_RESULT_MIN_WIDTH,
+        max: () => document.getElementById('testsArea').offsetWidth * RIGHT_PANE_MAX_SHARE,
+        apply: width => { testsResult.style.width = width + 'px'; },
+      });
+    }
+
+    function setupLeftEdgeResize(handle, pane, options) {
+      if (!handle || !pane) return;
+      try {
+        const saved = Number(localStorage.getItem(options.storageKey));
+        if (saved >= options.min) options.apply(saved);
+      } catch {}
+      let startX, startWidth, lastWidth;
+      const onMove = (e) => {
+        lastWidth = Math.round(Math.max(options.min, Math.min(options.max(), startWidth + startX - e.clientX)));
+        options.apply(lastWidth);
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        handle.classList.remove('active');
+        pane.classList.remove('resizing');
+        if (lastWidth) {
+          try { localStorage.setItem(options.storageKey, String(lastWidth)); } catch {}
+        }
+      };
+      handle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        startX = e.clientX;
+        startWidth = pane.offsetWidth;
+        lastWidth = 0;
+        handle.classList.add('active');
+        pane.classList.add('resizing');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+      });
+      handle.addEventListener('dblclick', () => {
+        pane.style.width = '';
+        pane.style.removeProperty('--ai-sidebar-width');
+        try { localStorage.removeItem(options.storageKey); } catch {}
+      });
+    }
+
     // ─── Session persistence ────────────────────────
     function persistSession() {
       try {
@@ -4077,10 +4582,31 @@ supported_features: 40"></textarea>
         }
         sessionStorage.setItem('tae_tabs', JSON.stringify(tabs));
         sessionStorage.setItem('tae_changed', JSON.stringify(Array.from(changedSinceReload)));
+        sessionStorage.setItem('tae_ai_chat', JSON.stringify({
+          sessionId: aiSessionId,
+          html: stripAiApprovalButtons(document.getElementById('aiConversation').innerHTML),
+          transcript: aiTranscript,
+          history: aiSessionHistory,
+          open: aiChatOpen,
+        }));
       } catch {}
     }
 
     function restoreSession() {
+      try {
+        const chatRaw = sessionStorage.getItem('tae_ai_chat');
+        if (chatRaw) {
+          const chat = JSON.parse(chatRaw);
+          if (chat && chat.sessionId) {
+            aiSessionId = chat.sessionId;
+            aiTranscript = Array.isArray(chat.transcript) ? chat.transcript : [];
+            aiSessionHistory = Array.isArray(chat.history) ? chat.history : [];
+            if (aiTranscript.length > 0) document.getElementById('aiConversation').innerHTML = chat.html || '';
+            if (chat.open) setTimeout(() => { if (!aiChatOpen) toggleAiChat(); }, 0);
+          }
+          sessionStorage.removeItem('tae_ai_chat');
+        }
+      } catch {}
       try {
         const raw = sessionStorage.getItem('tae_tabs');
         if (!raw) return;
@@ -4128,13 +4654,52 @@ supported_features: 40"></textarea>
     }
 
     // ─── AI Chat functions ──────────────────────────
+    const AI_HISTORY_MAX = 10;
+    const AI_TITLE_MAX_CHARS = 60;
+    const AI_TOOL_ARGS_PREVIEW_CHARS = 120;
+    const AI_TOOL_INPUT_MAX_CHARS = 4000;
+    const AI_PROVIDER_HELP = {
+      anthropic: `
+        <strong>Anthropic (Claude)</strong>, through the official Claude API.<br>
+        1. In the <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener">Claude Console</a>, create an API key (starts with <code>sk-ant-</code>).<br>
+        2. Plans that include monthly API credits: claim them in claude.ai → Settings → Billing by linking a Console organization, and create the key in that organization so TAE uses the credits.<br>
+        <strong>Models:</strong> <code>claude-opus-5-5</code> (default for chat), <code>claude-sonnet-5-5</code>, <code>claude-haiku-5-5</code> (default for completions). <em>Load models</em> lists everything your key can use.
+      `,
+      openai: `
+        <strong>OpenAI</strong>, paid API access.<br>
+        1. Create a key at <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com/api-keys</a> (starts with <code>sk-</code>).<br>
+        2. Use <em>Load models</em> to pick a chat model, and a small, fast model for inline completions.
+      `,
+      github: `
+        <strong>GitHub Models</strong>, free with a GitHub account (rate-limited).<br>
+        1. Create a fine-grained token at <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener">github.com/settings/personal-access-tokens</a> with <code>Models: Read-only</code>.<br>
+        2. Model ids include the publisher, e.g. <code>openai/gpt-4.1</code>. Use <em>Load models</em> to see the catalog.
+      `,
+      deepseek: `
+        <strong>DeepSeek</strong>, low-cost OpenAI-compatible API.<br>
+        1. Create a key at <a href="https://platform.deepseek.com/api-keys" target="_blank" rel="noopener">platform.deepseek.com/api-keys</a>.<br>
+        <strong>Models:</strong> <code>deepseek-chat</code> (default; supports the AI tools).
+      `,
+    };
+
+    const AI_EFFORT_HELP = {
+      anthropic: 'Higher effort thinks longer: slower and more tokens. Claude\'s default is medium. A changed chat effort applies to new chats.',
+      openai: 'Sent as reasoning_effort to reasoning models (Extra high and Max count as high); ignored for other models. A changed chat effort applies to new chats.',
+      github: 'Sent as reasoning_effort to reasoning models (Extra high and Max count as high); ignored for other models. A changed chat effort applies to new chats.',
+      deepseek: 'Sent as reasoning_effort when the model accepts it; ignored otherwise. A changed chat effort applies to new chats.',
+    };
+
+    function newAiSessionId() {
+      return 'chat-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+    }
+
     function toggleAiChat() {
       aiChatOpen = !aiChatOpen;
       document.getElementById('aiSidebar').classList.toggle('open', aiChatOpen);
       document.getElementById('aiChatBtn').classList.toggle('btn-accent', aiChatOpen);
       if (aiChatOpen) {
         updateAiContextInfo();
-        if (aiChatMessages.length === 0) clearAiChat();
+        if (aiTranscript.length === 0 && !aiBusy) renderAiWelcome();
         setTimeout(() => document.getElementById('aiInput').focus(), 250);
       }
     }
@@ -4144,67 +4709,100 @@ supported_features: 40"></textarea>
       const label = document.getElementById('aiStatusLabel');
       if (aiConfig.configured) {
         dot.className = 'ai-status-dot configured';
-        label.textContent = aiConfig.model || aiConfig.provider;
+        label.textContent = aiConfig.model || aiConfig.defaultModel || aiConfig.provider;
       } else {
         dot.className = 'ai-status-dot unconfigured';
         label.textContent = 'Not configured';
       }
     }
 
+    /** Mirrors what buildAiEditorContext() sends: active file, unsaved edits, selection. */
     function updateAiContextInfo() {
-      const el = document.getElementById('aiContextInfo');
-      if (activeTab) {
-        const name = activeTab.split('/').pop();
-        el.textContent = 'Context: ' + name;
-      } else {
-        el.textContent = 'Context: no file open';
+      const label = document.getElementById('aiContextInfo');
+      if (!label) return;
+      if (!activeTab || !openTabs.has(activeTab)) {
+        label.textContent = 'Context: no file open';
+        return;
       }
+      const tab = openTabs.get(activeTab);
+      let text = 'Context: ' + activeTab.split('/').pop();
+      if (tab.modified) text += ' (unsaved edits)';
+      if (monacoEditor && tab.model && monacoEditor.getModel() === tab.model) {
+        const selection = monacoEditor.getSelection();
+        if (selection && !selection.isEmpty()) {
+          const lineCount = selection.endLineNumber - selection.startLineNumber + 1;
+          text += ' · ' + (lineCount === 1 ? 'selection' : lineCount + ' selected lines');
+        }
+      }
+      label.textContent = text;
+    }
+
+    function aiScrollToBottom() {
+      const container = document.getElementById('aiMessages');
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function renderAiWelcome() {
+      document.getElementById('aiConversation').innerHTML =
+        '<div class="ai-msg ai-welcome">Ask about your automations or your Home Assistant setup. The AI can:' +
+        '<ul><li>search entities, devices, areas and services</li>' +
+        '<li>read files and make edits, each one approved by you</li>' +
+        '<li>type-check, reload automations and read the logs</li></ul></div>';
+    }
+
+    /** Pending approvals in a saved chat can no longer be answered. */
+    function stripAiApprovalButtons(html) {
+      const holder = document.createElement('div');
+      holder.innerHTML = html;
+      for (const actions of holder.querySelectorAll('.ai-approval-actions')) {
+        actions.outerHTML = '<div class="ai-approval-result">Not answered</div>';
+      }
+      for (const thinking of holder.querySelectorAll('#aiThinking')) thinking.remove();
+      return holder.innerHTML;
+    }
+
+    function archiveCurrentAiChat() {
+      if (aiTranscript.length === 0) return;
+      const firstUser = aiTranscript.find(item => item.role === 'user');
+      const title = firstUser ? firstUser.content.slice(0, AI_TITLE_MAX_CHARS) : 'Chat';
+      aiSessionHistory = aiSessionHistory.filter(item => item.sessionId !== aiSessionId);
+      aiSessionHistory.unshift({
+        title,
+        sessionId: aiSessionId,
+        html: stripAiApprovalButtons(document.getElementById('aiConversation').innerHTML),
+        messages: aiTranscript.slice(),
+        timestamp: Date.now(),
+      });
+      if (aiSessionHistory.length > AI_HISTORY_MAX) aiSessionHistory.length = AI_HISTORY_MAX;
+    }
+
+    function closeAiHistoryPanel() {
+      document.getElementById('aiHistoryPanel').style.display = 'none';
+      const historyButton = document.getElementById('aiHistoryBtn');
+      if (historyButton) historyButton.classList.remove('btn-accent');
     }
 
     function clearAiChat() {
-      // Save current session to history before clearing (if non-empty)
-      if (aiChatMessages.length > 0) {
-        const firstUser = aiChatMessages.find(m => m.role === 'user');
-        const title = firstUser ? firstUser.content.slice(0, 60) : 'Chat';
-        aiSessionHistory.unshift({ title, messages: aiChatMessages.slice(), timestamp: Date.now() });
-        if (aiSessionHistory.length > 10) aiSessionHistory.length = 10;
-      }
-
-      aiChatMessages = [];
-      aiStreaming = false;
-      aiStreamingContent = '';
-
-      const conv = document.getElementById('aiConversation');
-      const ctx = buildAiSystemContext();
-      let bodyHtml;
-      if (ctx) {
-        const preview = ctx.length > 2000 ? ctx.slice(0, 2000) + '\n… (' + (ctx.length - 2000) + ' chars)' : ctx;
-        bodyHtml = '<div class="ai-context-body">' + escapeHtml(preview) + '</div>';
-      } else {
-        bodyHtml = '<div class="ai-context-empty">No context — open a file or load entities to give the AI more information.</div>';
-      }
-      conv.innerHTML =
-        '<details class="ai-context-details"><summary>System context · rebuilt each message</summary>' + bodyHtml + '</details>' +
-        '<div class="ai-msg ai-msg-assistant" style="color: var(--text-dim); font-size: 11px;">Ask questions about your automations, get help writing TAE code, or describe what you want to automate.</div>';
-
-      // Close history panel if open
-      document.getElementById('aiHistoryPanel').style.display = 'none';
-      const hBtn = document.getElementById('aiHistoryBtn');
-      if (hBtn) hBtn.classList.remove('btn-accent');
+      if (aiBusy) send({ type: 'ai_chat_cancel', sessionId: aiSessionId });
+      archiveCurrentAiChat();
+      aiSessionId = newAiSessionId();
+      aiTranscript = [];
+      aiChatCostUsd = 0;
+      resetAiStreamingState();
+      setAiBusy(false);
+      renderAiWelcome();
+      closeAiHistoryPanel();
     }
 
     function toggleAiHistory() {
       const panel = document.getElementById('aiHistoryPanel');
-      const btn = document.getElementById('aiHistoryBtn');
-      const isOpen = panel.style.display !== 'none';
-      if (isOpen) {
-        panel.style.display = 'none';
-        btn.classList.remove('btn-accent');
-      } else {
-        renderAiHistoryPanel();
-        panel.style.display = 'block';
-        btn.classList.add('btn-accent');
+      if (panel.style.display !== 'none') {
+        closeAiHistoryPanel();
+        return;
       }
+      renderAiHistoryPanel();
+      panel.style.display = 'block';
+      document.getElementById('aiHistoryBtn').classList.add('btn-accent');
     }
 
     function renderAiHistoryPanel() {
@@ -4213,720 +4811,437 @@ supported_features: 40"></textarea>
         panel.innerHTML = '<div class="ai-history-empty">No previous chats yet</div>';
         return;
       }
-      panel.innerHTML = aiSessionHistory.map((s, i) => {
-        const ago = formatAiHistoryAge(s.timestamp);
-        const count = s.messages.length;
-        return '<div class="ai-history-item" onclick="restoreAiSession(' + i + ')">' +
-          '<span class="ai-history-title">' + escapeHtml(s.title) + (s.title.length >= 60 ? '…' : '') + '</span>' +
-          '<span class="ai-history-meta">' + count + ' msg · ' + ago + '</span>' +
-          '</div>';
-      }).join('');
+      panel.innerHTML = aiSessionHistory.map((item, iItem) =>
+        '<div class="ai-history-item" onclick="restoreAiSession(' + iItem + ')">' +
+          '<span class="ai-history-title">' + escapeHtml(item.title) + (item.title.length >= AI_TITLE_MAX_CHARS ? '…' : '') + '</span>' +
+          '<span class="ai-history-meta">' + item.messages.length + ' msg · ' + formatAiHistoryAge(item.timestamp) + '</span>' +
+        '</div>'
+      ).join('');
     }
 
-    function formatAiHistoryAge(ts) {
-      const diff = Math.floor((Date.now() - ts) / 1000);
-      if (diff < 60) return 'just now';
-      if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
-      if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
-      return Math.floor(diff / 86400) + 'd ago';
+    function formatAiHistoryAge(timestamp) {
+      const seconds = Math.floor((Date.now() - timestamp) / 1000);
+      if (seconds < 60) return 'just now';
+      if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+      if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+      return Math.floor(seconds / 86400) + 'd ago';
     }
 
-    function restoreAiSession(idx) {
-      const session = aiSessionHistory[idx];
-      if (!session) return;
-
-      // Save current session if non-empty before replacing
-      if (aiChatMessages.length > 0) {
-        const firstUser = aiChatMessages.find(m => m.role === 'user');
-        const title = firstUser ? firstUser.content.slice(0, 60) : 'Chat';
-        aiSessionHistory.splice(0, 0, { title, messages: aiChatMessages.slice(), timestamp: Date.now() });
-        // The session we're restoring is now at idx+1
-        aiSessionHistory.splice(idx + 1, 1);
-      } else {
-        aiSessionHistory.splice(idx, 1);
-      }
-      if (aiSessionHistory.length > 10) aiSessionHistory.length = 10;
-
-      aiChatMessages = session.messages.slice();
-      aiStreaming = false;
-      aiStreamingContent = '';
-
-      // Re-render conversation area
-      const conv = document.getElementById('aiConversation');
-      const ctx = buildAiSystemContext();
-      let bodyHtml;
-      if (ctx) {
-        const preview = ctx.length > 2000 ? ctx.slice(0, 2000) + '\n… (' + (ctx.length - 2000) + ' chars)' : ctx;
-        bodyHtml = '<div class="ai-context-body">' + escapeHtml(preview) + '</div>';
-      } else {
-        bodyHtml = '<div class="ai-context-empty">No context — open a file or load entities to give the AI more information.</div>';
-      }
-      conv.innerHTML = '<details class="ai-context-details"><summary>System context · rebuilt each message</summary>' + bodyHtml + '</details>';
-      for (const msg of aiChatMessages) {
-        appendAiMessage(msg.role, msg.content);
-      }
-
-      // Close history panel
-      document.getElementById('aiHistoryPanel').style.display = 'none';
-      document.getElementById('aiHistoryBtn').classList.remove('btn-accent');
+    /** Reopen a past chat; the server keeps its history for a while, so it can be continued. */
+    function restoreAiSession(index) {
+      const item = aiSessionHistory[index];
+      if (!item || aiBusy) return;
+      archiveCurrentAiChat();
+      aiSessionHistory = aiSessionHistory.filter(entry => entry.sessionId !== item.sessionId);
+      aiSessionId = item.sessionId;
+      aiTranscript = item.messages.slice();
+      aiChatCostUsd = 0;
+      resetAiStreamingState();
+      document.getElementById('aiConversation').innerHTML = item.html;
+      closeAiHistoryPanel();
+      aiScrollToBottom();
     }
 
-    function handleAiInputKey(e) {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
+    function handleAiInputKey(event) {
+      if (handleAiMentionKey(event)) return;
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
         sendAiChat();
       }
     }
 
     function autoResizeAiInput() {
-      const el = document.getElementById('aiInput');
-      el.style.height = 'auto';
-      el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+      const input = document.getElementById('aiInput');
+      input.style.height = 'auto';
+      input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+    }
+
+    function setAiBusy(busy) {
+      aiBusy = busy;
+      const button = document.getElementById('aiSendBtn');
+      button.disabled = false;
+      button.textContent = busy ? 'Stop' : 'Send';
+      button.onclick = busy ? stopAiChat : sendAiChat;
+    }
+
+    function stopAiChat() {
+      send({ type: 'ai_chat_cancel', sessionId: aiSessionId });
+    }
+
+    function buildAiEditorContext() {
+      const context = {
+        localTime: new Date().toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'short' }) +
+          ' (' + Intl.DateTimeFormat().resolvedOptions().timeZone + ')',
+      };
+      if (activeTab && openTabs.has(activeTab)) {
+        const tab = openTabs.get(activeTab);
+        context.activeFile = activeTab;
+        context.modified = !!tab.modified;
+        if (tab.modified && tab.model) context.content = tab.model.getValue();
+        if (monacoEditor && tab.model && monacoEditor.getModel() === tab.model) {
+          const selection = monacoEditor.getSelection();
+          const selected = selection ? tab.model.getValueInRange(selection) : '';
+          if (selected) context.selection = selected;
+        }
+      }
+      return context;
     }
 
     function sendAiChat() {
-      if (aiStreaming) return;
+      if (aiBusy) return;
       const input = document.getElementById('aiInput');
       const text = input.value.trim();
       if (!text) return;
-
       if (!aiConfig.configured) {
         showAiSettingsDialog();
         return;
       }
-
-      // ─── /fetch command — test context resolution without calling AI ───
-      if (text.startsWith('/fetch ')) {
-        const jsonStr = text.slice(7).trim();
-        try {
-          const parsed = JSON.parse(jsonStr);
-          if (parsed.needs_entities || parsed.needs_area || parsed.needs_skill) {
-            input.value = '';
-            autoResizeAiInput();
-            appendAiMessage('user', text);
-            if (cachedAllEntityStates.length === 0) {
-              appendAiThinkingBlockMulti(JSON.stringify(parsed, null, 2), [{ label: 'Status', text: 'Loading entities — please wait then retry.' }]);
-              send({ type: 'get_all_entities' });
-              if (!cachedDeviceRegistry) send({ type: 'get_device_registry' });
-              return;
-            }
-            if (!cachedDeviceRegistry) send({ type: 'get_device_registry' });
-            const sections = [];
-            if (parsed.needs_entities && Array.isArray(parsed.needs_entities)) {
-              const ctx = resolveEntityContext(parsed.needs_entities);
-              sections.push({ label: 'Resolved entities', text: ctx || '(no matching entities found)' });
-            }
-            if (parsed.needs_area) {
-              const ctx = resolveAreaContext(parsed.needs_area);
-              sections.push({ label: 'Area entities', text: ctx || '(area not found or empty)' });
-            }
-            if (parsed.needs_skill) {
-              const sk = aiSkillMdCache || '(SKILL.md not loaded yet)';
-              sections.push({ label: 'TAE reference', text: sk.slice(0, 300) + (sk.length > 300 ? '\n… (' + sk.length + ' chars)' : '') });
-            }
-            appendAiThinkingBlockMulti(JSON.stringify(parsed, null, 2), sections);
-            return;
-          }
-        } catch {}
-      }
-
-      // Ensure device registry is loaded for agentic resolution
-      if (!cachedDeviceRegistry) send({ type: 'get_device_registry' });
-
-      // Add user message
-      aiChatMessages.push({ role: 'user', content: text });
-      appendAiMessage('user', text);
+      if (aiTranscript.length === 0) document.getElementById('aiConversation').innerHTML = '';
+      aiTranscript.push({ role: 'user', content: text });
+      appendAiUserMessage(text);
       input.value = '';
       autoResizeAiInput();
+      resetAiStreamingState();
+      setAiBusy(true);
+      showAiThinking();
+      hideAiMentionPopup();
+      const context = buildAiEditorContext();
+      const mentions = extractMentions(text);
+      if (mentions.length) context.mentions = mentions;
+      send({ type: 'ai_chat_send', sessionId: aiSessionId, text, context });
+    }
 
-      // Build system context
-      const baseSystemContext = buildAiSystemContext();
+    function appendAiUserMessage(text) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'ai-msg';
+      wrapper.innerHTML = '<div class="ai-msg-label">You</div><div class="ai-msg-user">' + highlightMentions(escapeHtml(text)) + '</div>';
+      document.getElementById('aiConversation').appendChild(wrapper);
+      aiScrollToBottom();
+    }
 
-      // Start streaming — pass 1 (agent entity probe)
-      aiStreaming = true;
-      aiStreamingContent = '';
-      aiAgentPassState = 1;
-      aiAgentUserMessages = aiChatMessages.map(m => ({ role: m.role, content: m.content }));
-      aiAgentSystemContext = baseSystemContext;
+    function appendAiNotice(text) {
+      const notice = document.createElement('div');
+      notice.className = 'ai-msg ai-msg-notice';
+      notice.textContent = text;
+      document.getElementById('aiConversation').appendChild(notice);
+      aiScrollToBottom();
+    }
 
-      document.getElementById('aiSendBtn').disabled = true;
-      document.getElementById('aiSendBtn').textContent = 'Stop';
-      document.getElementById('aiSendBtn').onclick = () => { send({ type: 'ai_cancel' }); aiAgentPassState = 0; finalizeAiStreaming(null); };
+    function appendAiError(text) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'ai-msg';
+      wrapper.innerHTML = '<div class="ai-msg-error">' + escapeHtml(text) + '</div>';
+      document.getElementById('aiConversation').appendChild(wrapper);
+      aiScrollToBottom();
+    }
 
-      // Show thinking indicator
-      appendAiThinking();
+    function showAiThinking() {
+      const conversation = document.getElementById('aiConversation');
+      let thinking = document.getElementById('aiThinking');
+      if (!thinking) {
+        thinking = document.createElement('div');
+        thinking.className = 'ai-msg';
+        thinking.id = 'aiThinking';
+        thinking.innerHTML = '<div class="ai-msg-thinking">Thinking</div>';
+      }
+      conversation.appendChild(thinking); //< keeps it last
+      aiScrollToBottom();
+    }
 
-      send({
-        type: 'ai_chat',
-        id: Date.now(),
-        messages: aiAgentUserMessages,
-        systemContext: buildAgentSystemContext(baseSystemContext),
+    function hideAiThinking() {
+      const thinking = document.getElementById('aiThinking');
+      if (thinking) thinking.remove();
+    }
+
+    function resetAiStreamingState() {
+      aiTextBubble = null;
+      aiToolCards = new Map();
+      hideAiThinking();
+    }
+
+    function appendAiTextDelta(delta) {
+      hideAiThinking();
+      if (!aiTextBubble) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'ai-msg';
+        wrapper.innerHTML = '<div class="ai-msg-label">AI</div><div class="ai-msg-assistant"></div>';
+        document.getElementById('aiConversation').appendChild(wrapper);
+        aiTextBubble = { element: wrapper.querySelector('.ai-msg-assistant'), text: '' };
+      }
+      aiTextBubble.text += delta;
+      if (aiRenderPending) return;
+      aiRenderPending = true;
+      requestAnimationFrame(() => {
+        aiRenderPending = false;
+        if (aiTextBubble) aiTextBubble.element.innerHTML = renderAiMarkdown(aiTextBubble.text);
+        aiScrollToBottom();
       });
     }
 
-    function buildAgentSystemContext(baseContext) {
-      return `CONTEXT RESOLUTION PROTOCOL:
-If you need more information to answer the user's question, respond ONLY with a JSON object (nothing else) using one or more of these keys:
-
-  {"needs_entities": ["keyword1", "keyword2"]}
-    → Fetches devices/entities matching keywords (name, entity_id, domain, area name).
-      All sibling entities on matched devices are included automatically.
-      Examples: ["vacuum","roborock"], ["living room","light"], ["s7"]
-
-  {"needs_area": "area name or id"}
-    → Fetches all devices and entities assigned to a specific area.
-      Use the exact area name or area_id from the areas list below.
-      Example: {"needs_area": "living_room"}
-
-  {"needs_skill": true}
-    → Fetches the full TAE API reference (use when writing non-trivial automation code).
-
-You may combine keys in one object, e.g.:
-  {"needs_entities": ["vacuum"], "needs_skill": true}
-
-If all necessary context is already provided below, answer directly.
-
-` + baseContext;
+    function finishAiTextBubble() {
+      if (!aiTextBubble) return;
+      aiTextBubble.element.innerHTML = renderAiMarkdown(aiTextBubble.text);
+      if (aiTextBubble.text.trim()) aiTranscript.push({ role: 'assistant', content: aiTextBubble.text });
+      aiTextBubble = null;
     }
 
-    function buildAiSystemContext() {
-      let context = '';
-
-      // Current file
-      if (activeTab && openTabs.has(activeTab)) {
-        const tab = openTabs.get(activeTab);
-        const content = tab.model ? tab.model.getValue() : tab.content;
-        context += `Currently open file (${activeTab}):\n\`\`\`typescript\n${content.slice(0, 8000)}\n\`\`\`\n\n`;
-      }
-
-      // Areas — always inject: small, gives AI the home layout + IDs for area queries
-      if (cachedDeviceRegistry && cachedDeviceRegistry.areas && cachedDeviceRegistry.areas.length > 0) {
-        const areaLines = cachedDeviceRegistry.areas
-          .filter(a => a.name)
-          .sort((a, b) => a.name.localeCompare(b.name))
-          .map(a => `  ${a.name} (id: ${a.area_id})`)
-          .join('\n');
-        context += `Home areas:\n${areaLines}\n\n`;
-      }
-
-      // SKILL.md is NOT injected here — fetched on demand via needs_skill probe
-
-      return context;
+    function summarizeToolInput(name, input) {
+      if (!input || typeof input !== 'object') return '';
+      if (input.path) return input.path;
+      if (input.entity_id) return input.entity_id;
+      if (name === 'call_service') return input.domain + '.' + input.service;
+      if (name === 'search_entities') return [input.query, input.domain, input.area].filter(Boolean).join(' · ');
+      if (name === 'set_automation_state') return input.action + ' ' + input.automation_id;
+      const json = JSON.stringify(input);
+      return json === '{}' ? '' : json.slice(0, AI_TOOL_ARGS_PREVIEW_CHARS);
     }
 
-    function appendAiMessage(role, content, usage) {
-      const conv = document.getElementById('aiConversation');
-      const scrollEl = document.getElementById('aiMessages');
-      const div = document.createElement('div');
-      div.className = 'ai-msg';
+    function createAiToolCard(event) {
+      let inputText = JSON.stringify(event.input, null, 2) || '';
+      if (inputText.length > AI_TOOL_INPUT_MAX_CHARS) inputText = inputText.slice(0, AI_TOOL_INPUT_MAX_CHARS) + '\n…';
+      const card = document.createElement('details');
+      card.className = 'ai-tool-card running';
+      card.innerHTML =
+        '<summary><span class="ai-tool-status"></span>' +
+          '<span class="ai-tool-title">' + escapeHtml(event.title || event.name) + '</span>' +
+          '<span class="ai-tool-args">' + escapeHtml(summarizeToolInput(event.name, event.input)) + '</span></summary>' +
+        '<div class="ai-tool-body"><div class="ai-tool-section"><strong>Input</strong>' +
+          '<pre class="ai-tool-pre">' + escapeHtml(inputText) + '</pre></div></div>';
+      document.getElementById('aiConversation').appendChild(card);
+      aiToolCards.set(event.id, card);
+      aiScrollToBottom();
+      return card;
+    }
 
-      if (role === 'user') {
-        div.innerHTML = '<div class="ai-msg-label">You</div><div class="ai-msg-user">' + escapeHtml(content) + '</div>';
-      } else {
-        let usageHtml = '';
-        if (usage) {
-          const { promptTokens, completionTokens, totalTokens, extra } = usage;
-          let tooltipLines = [
-            'Prompt tokens: ' + promptTokens,
-            'Completion tokens: ' + completionTokens,
-            'Total tokens: ' + totalTokens,
-          ];
-          if (extra) {
-            for (const [k, v] of Object.entries(extra)) {
-              tooltipLines.push(k.replace(/_/g, ' ') + ': ' + v);
+    function renderAiDiff(diff) {
+      const lines = diff.split('\n').map(line => {
+        let lineClass = '';
+        if (line.startsWith('+++') || line.startsWith('---')) lineClass = 'meta';
+        else if (line.startsWith('@@')) lineClass = 'hunk';
+        else if (line.startsWith('+')) lineClass = 'add';
+        else if (line.startsWith('-')) lineClass = 'del';
+        return '<div' + (lineClass ? ' class="' + lineClass + '"' : '') + '>' + escapeHtml(line) + '</div>';
+      });
+      return '<div class="ai-diff">' + lines.join('') + '</div>';
+    }
+
+    function showAiApproval(event) {
+      hideAiThinking();
+      const card = aiToolCards.get(event.id) || createAiToolCard(event);
+      card.classList.remove('running');
+      card.classList.add('waiting');
+      card.open = true;
+      const toolId = escapeAttr(event.id);
+      const approval = document.createElement('div');
+      approval.className = 'ai-approval';
+      approval.innerHTML =
+        '<div class="ai-approval-summary">' + escapeHtml(event.summary) + '</div>' +
+        (event.diff ? renderAiDiff(event.diff) : '') +
+        '<div class="ai-approval-actions">' +
+          '<button class="btn btn-accent" onclick="aiDecide(\'' + toolId + '\', \'allow\')">Allow</button>' +
+          '<button class="btn" title="Allow every &quot;' + escapeHtml(event.title) + '&quot; for the rest of this chat without asking" onclick="aiDecide(\'' + toolId + '\', \'always\')">Always allow</button>' +
+          '<button class="btn btn-danger" onclick="aiDecide(\'' + toolId + '\', \'deny\')">Deny</button>' +
+        '</div>';
+      const body = card.querySelector('.ai-tool-body');
+      body.insertBefore(approval, body.firstChild);
+      aiScrollToBottom();
+      if (!aiChatOpen) toggleAiChat();
+    }
+
+    function aiDecide(toolId, decision) {
+      send({ type: 'ai_tool_decision', sessionId: aiSessionId, toolUseId: toolId, decision });
+      const card = aiToolCards.get(toolId);
+      if (!card) return;
+      card.classList.remove('waiting');
+      card.classList.add('running');
+      const actions = card.querySelector('.ai-approval-actions');
+      const labels = { allow: 'Allowed', always: 'Allowed (and for the rest of this chat)', deny: 'Denied' };
+      if (actions) actions.outerHTML = '<div class="ai-approval-result">' + labels[decision] + '</div>';
+      showAiThinking();
+    }
+
+    function finishAiToolCard(event) {
+      const card = aiToolCards.get(event.id);
+      if (!card) return;
+      card.classList.remove('running', 'waiting');
+      card.classList.add(event.declined ? 'declined' : event.ok ? 'ok' : 'failed');
+      const section = document.createElement('div');
+      section.className = 'ai-tool-section';
+      section.innerHTML = '<strong>' + (event.declined ? 'Declined' : event.ok ? 'Result' : 'Error') + '</strong>' +
+        '<pre class="ai-tool-pre">' + escapeHtml(event.output || '') + '</pre>';
+      card.querySelector('.ai-tool-body').appendChild(section);
+      if (!card.querySelector('.ai-approval')) card.open = false;
+    }
+
+    function formatTokenCount(count) {
+      return count >= 1000 ? (count / 1000).toFixed(1) + 'k' : String(count);
+    }
+
+    function appendAiUsage(usage, costUsd) {
+      if (!usage || (!usage.inputTokens && !usage.outputTokens && !usage.cacheReadTokens)) return;
+      if (typeof costUsd === 'number') aiChatCostUsd += costUsd;
+      const totalInput = usage.inputTokens + usage.cacheReadTokens + usage.cacheWriteTokens;
+      const lines = [
+        'Input: ' + totalInput + ' tokens',
+        '  uncached: ' + usage.inputTokens,
+        '  cache read: ' + usage.cacheReadTokens,
+        '  cache write: ' + usage.cacheWriteTokens,
+        'Output: ' + usage.outputTokens + ' tokens',
+      ];
+      if (typeof costUsd === 'number') lines.push('Cost (estimate): ' + formatCost(costUsd), 'This chat so far: ' + formatCost(aiChatCostUsd));
+      const badge = document.createElement('div');
+      badge.className = 'ai-token-badge';
+      badge.innerHTML = '↑' + formatTokenCount(totalInput) + ' ↓' + formatTokenCount(usage.outputTokens) +
+        (usage.cacheReadTokens ? ' · ' + Math.round(100 * usage.cacheReadTokens / Math.max(totalInput, 1)) + '% cached' : '') +
+        (typeof costUsd === 'number' ? ' · ≈' + formatCost(costUsd) + ' (chat ' + formatCost(aiChatCostUsd) + ')' : '') +
+        '<div class="ai-token-tooltip">' + lines.map(escapeHtml).join('<br>') + '</div>';
+      document.getElementById('aiConversation').appendChild(badge);
+      aiScrollToBottom();
+    }
+
+    function handleAiEvent(sessionId, event) {
+      if (sessionId !== aiSessionId || !event) return; //< events for a chat that was put away
+      switch (event.type) {
+        case 'thinking':
+          if (!aiTextBubble) showAiThinking();
+          break;
+        case 'text':
+          appendAiTextDelta(event.delta || '');
+          break;
+        case 'tool_start':
+          finishAiTextBubble();
+          hideAiThinking();
+          createAiToolCard(event);
+          break;
+        case 'approval_request':
+          showAiApproval(event);
+          break;
+        case 'tool_end':
+          finishAiToolCard(event);
+          showAiThinking();
+          break;
+        case 'notice':
+          finishAiTextBubble();
+          appendAiNotice(event.message);
+          break;
+        case 'error':
+          finishAiTextBubble();
+          hideAiThinking();
+          appendAiError(event.message);
+          break;
+        case 'done':
+          finishAiTextBubble();
+          hideAiThinking();
+          if (event.stopReason === 'cancelled') appendAiNotice('Stopped.');
+          appendAiUsage(event.usage, event.costUsd);
+          for (const card of aiToolCards.values()) {
+            if (card.classList.contains('running') || card.classList.contains('waiting')) {
+              card.classList.remove('running', 'waiting');
+              card.classList.add('declined');
+              const actions = card.querySelector('.ai-approval-actions');
+              if (actions) actions.outerHTML = '<div class="ai-approval-result">Not answered</div>';
             }
           }
-          usageHtml = '<div class="ai-token-badge">↑' + promptTokens + ' ↓' + completionTokens +
-            '<div class="ai-token-tooltip">' + tooltipLines.map(escapeHtml).join('<br>') + '</div></div>';
-        }
-        div.innerHTML = '<div class="ai-msg-label">AI</div><div class="ai-msg-assistant">' + renderAiMarkdown(content) + '</div>' + usageHtml;
+          setAiBusy(false);
+          break;
       }
-
-      conv.appendChild(div);
-      scrollEl.scrollTop = scrollEl.scrollHeight;
-    }
-
-    function appendAiThinking() {
-      const conv = document.getElementById('aiConversation');
-      const scrollEl = document.getElementById('aiMessages');
-      const div = document.createElement('div');
-      div.className = 'ai-msg';
-      div.id = 'aiThinking';
-      div.innerHTML = '<div class="ai-msg-label">AI</div><div class="ai-msg-thinking">Thinking</div>';
-      conv.appendChild(div);
-      scrollEl.scrollTop = scrollEl.scrollHeight;
-    }
-
-    function appendAiThinkingBlock(query, result) {
-      const conv = document.getElementById('aiConversation');
-      const scrollEl = document.getElementById('aiMessages');
-      const div = document.createElement('div');
-      div.className = 'ai-msg';
-      div.innerHTML =
-        '<div class="ai-msg-label">AI</div>' +
-        '<details class="ai-thinking-details">' +
-          '<summary>Thinking</summary>' +
-          '<div class="ai-thinking-body">' +
-            '<div class="ai-thinking-section">' +
-              '<strong>Entity query</strong>' +
-              '<pre class="ai-thinking-pre">' + escapeHtml(query) + '</pre>' +
-            '</div>' +
-            (result
-              ? '<div class="ai-thinking-section">' +
-                  '<strong>Resolved context</strong>' +
-                  '<pre class="ai-thinking-pre">' + escapeHtml(result) + '</pre>' +
-                '</div>'
-              : '') +
-          '</div>' +
-        '</details>';
-      conv.appendChild(div);
-      scrollEl.scrollTop = scrollEl.scrollHeight;
-    }
-
-    // ─── Entity context resolution ───────────────────────────────────
-
-    // Supported-features bitmask decoders per domain
-    const FEATURE_FLAGS = {
-      vacuum: { 1:'start', 2:'stop', 4:'pause', 8:'return_home', 16:'battery',
-                64:'send_command', 128:'locate', 256:'clean_spot', 2048:'fan_speed' },
-      cover:  { 1:'open', 2:'close', 4:'set_position', 8:'stop',
-                16:'tilt_open', 32:'tilt_close', 64:'set_tilt_position' },
-      climate:{ 1:'target_temperature', 2:'target_temperature_range', 4:'target_humidity',
-                8:'fan_mode', 16:'preset_mode', 32:'swing_mode', 64:'aux_heat' },
-      media_player: {
-        1:'pause', 2:'seek', 4:'volume_set', 8:'volume_mute',
-        16:'previous_track', 32:'next_track', 64:'turn_on', 128:'turn_off',
-        256:'play_media', 512:'volume_step', 1024:'select_source',
-        2048:'stop', 4096:'clear_playlist', 8192:'play',
-        16384:'shuffle_set', 32768:'select_sound_mode',
-      },
-      fan:    { 1:'set_speed', 8:'oscillate', 16:'direction', 64:'preset_mode' },
-      lock:   { 1:'open', 8:'unlocklatch' },
-      alarm_control_panel: { 1:'arm_home', 2:'arm_away', 4:'arm_night',
-                              8:'trigger', 16:'arm_custom_bypass', 32:'arm_vacation' },
-    };
-
-    function getEntityServices(entity) {
-      const domain = entity.entity_id.split('.')[0];
-      const supported = entity.attributes?.supported_features || 0;
-      const flags = FEATURE_FLAGS[domain];
-      if (flags && supported) {
-        const features = [];
-        for (const [bit, name] of Object.entries(flags)) {
-          if (supported & parseInt(bit)) features.push(name);
-        }
-        if (features.length > 0) return features;
-      }
-      return SERVICE_MAP[domain] || [];
-    }
-
-    function formatEntityForContext(entity) {
-      const state = entity.state || '';
-      const name = entity.attributes?.friendly_name || '';
-      const attrs = entity.attributes || {};
-      let line = '  ' + entity.entity_id;
-      if (name && name !== entity.entity_id) line += ' (' + name + ')';
-      line += '  state: ' + state;
-      if (attrs.unit_of_measurement) line += ' ' + attrs.unit_of_measurement;
-      const services = getEntityServices(entity);
-      if (services.length > 0) line += '  services: ' + services.join(', ');
-      return line;
-    }
-
-    function resolveEntityContext(keywords) {
-      const kws = keywords.map(k => k.toLowerCase().trim()).filter(Boolean);
-      if (!kws.length || !cachedAllEntityStates.length) return '';
-
-      const stateMap = new Map(cachedAllEntityStates.map(e => [e.entity_id, e]));
-
-      function scoreEntity(e) {
-        const id = e.entity_id.toLowerCase();
-        const name = (e.attributes?.friendly_name || '').toLowerCase();
-        return kws.reduce((s, kw) => s + (id.includes(kw) || name.includes(kw) ? 1 : 0), 0);
-      }
-
-      // ── With device registry: group by device and include siblings ──
-      if (cachedDeviceRegistry && cachedDeviceRegistry.entityRegistry) {
-        const { devices, entityRegistry, areas } = cachedDeviceRegistry;
-        const areaMap = new Map((areas || []).map(a => [a.area_id, a.name]));
-
-        const matchedDeviceIds = new Set();
-
-        // Score entities; collect their device IDs
-        for (const e of cachedAllEntityStates) {
-          if (scoreEntity(e) > 0) {
-            const reg = entityRegistry.find(r => r.entity_id === e.entity_id);
-            if (reg && reg.device_id) matchedDeviceIds.add(reg.device_id);
-          }
-        }
-
-        // Score device names/models/areas directly
-        for (const dev of devices) {
-          const areaName = (dev.area_id ? areaMap.get(dev.area_id) : '') || '';
-          const devStr = [
-            dev.name_by_user, dev.name, dev.model, dev.manufacturer, areaName,
-          ].filter(Boolean).join(' ').toLowerCase();
-          if (kws.some(kw => devStr.includes(kw))) matchedDeviceIds.add(dev.id);
-        }
-
-        // Score areas directly — if a keyword matches an area name, include all devices in it
-        for (const area of (areas || [])) {
-          if (kws.some(kw => area.name.toLowerCase().includes(kw))) {
-            for (const dev of devices) {
-              if (dev.area_id === area.area_id) matchedDeviceIds.add(dev.id);
-            }
-            // Also include entities directly assigned to the area
-            for (const reg of entityRegistry) {
-              if (reg.area_id === area.area_id && !reg.device_id) {
-                // Mark as orphan-area match below
-                reg._areaMatch = true;
-              }
-            }
-          }
-        }
-
-        if (matchedDeviceIds.size === 0) return resolveEntityContextFallback(kws);
-
-        let result = '';
-        for (const devId of matchedDeviceIds) {
-          const dev = devices.find(d => d.id === devId);
-          const areaName = dev?.area_id ? areaMap.get(dev.area_id) : null;
-          const label = [dev?.name_by_user || dev?.name, dev?.manufacturer, dev?.model]
-            .filter(Boolean).join(' — ');
-          result += 'Device: ' + (label || devId);
-          if (areaName) result += '  [' + areaName + ']';
-          result += '\n';
-
-          const devEntityIds = entityRegistry
-            .filter(r => r.device_id === devId)
-            .map(r => r.entity_id);
-
-          for (const eid of devEntityIds) {
-            const e = stateMap.get(eid);
-            if (e) result += formatEntityForContext(e) + '\n';
-            else result += '  ' + eid + '  (state unknown)\n';
-          }
-          result += '\n';
-        }
-
-        // Include matched entities with no device
-        for (const e of cachedAllEntityStates) {
-          if (scoreEntity(e) > 0) {
-            const reg = entityRegistry.find(r => r.entity_id === e.entity_id);
-            if (!reg || !reg.device_id) result += formatEntityForContext(e) + '\n';
-          }
-        }
-        // Include area-matched entities with no device
-        for (const reg of entityRegistry) {
-          if (reg._areaMatch) {
-            reg._areaMatch = false;
-            if (!matchedDeviceIds.has(reg.device_id)) {
-              const e = stateMap.get(reg.entity_id);
-              if (e) result += formatEntityForContext(e) + '\n';
-            }
-          }
-        }
-
-        return result.trim();
-      }
-
-      // ── Fallback: no device registry ──────────────────────────────────
-      return resolveEntityContextFallback(kws);
-    }
-
-    function resolveEntityContextFallback(kws) {
-      return cachedAllEntityStates
-        .filter(e => {
-          const id = e.entity_id.toLowerCase();
-          const name = (e.attributes?.friendly_name || '').toLowerCase();
-          return kws.some(kw => id.includes(kw) || name.includes(kw));
-        })
-        .map(formatEntityForContext)
-        .join('\n');
-    }
-
-    function resolveAreaContext(areaQuery) {
-      if (!cachedDeviceRegistry || !cachedDeviceRegistry.areas) return '';
-      const { devices, entityRegistry, areas } = cachedDeviceRegistry;
-      const q = String(areaQuery).toLowerCase().trim();
-
-      // Match by area_id or name (case-insensitive)
-      const area = areas.find(a =>
-        (a.area_id && a.area_id.toLowerCase() === q) ||
-        (a.name && a.name.toLowerCase() === q)
-      );
-      if (!area) return '';
-
-      const stateMap = new Map(cachedAllEntityStates.map(e => [e.entity_id, e]));
-      let result = `Area: ${area.name} (id: ${area.area_id})\n\n`;
-
-      // Devices in this area
-      const areaDevices = devices.filter(d => d.area_id === area.area_id);
-      for (const dev of areaDevices) {
-        const label = [dev.name_by_user || dev.name, dev.manufacturer, dev.model].filter(Boolean).join(' — ');
-        result += 'Device: ' + label + '\n';
-        const devEntityIds = entityRegistry.filter(r => r.device_id === dev.id).map(r => r.entity_id);
-        for (const eid of devEntityIds) {
-          const e = stateMap.get(eid);
-          if (e) result += formatEntityForContext(e) + '\n';
-          else result += '  ' + eid + '  (state unknown)\n';
-        }
-        result += '\n';
-      }
-
-      // Entities directly assigned to the area (no device)
-      const areaEntities = entityRegistry.filter(r => r.area_id === area.area_id && !r.device_id);
-      for (const reg of areaEntities) {
-        const e = stateMap.get(reg.entity_id);
-        if (e) result += formatEntityForContext(e) + '\n';
-      }
-
-      return result.trim();
-    }
-
-    // Multi-section thinking block (probe query + N result sections)
-    function appendAiThinkingBlockMulti(query, sections) {
-      const conv = document.getElementById('aiConversation');
-      const scrollEl = document.getElementById('aiMessages');
-      const div = document.createElement('div');
-      div.className = 'ai-msg';
-      let bodyHtml = '<div class="ai-thinking-section"><strong>Probe</strong><pre class="ai-thinking-pre">' + escapeHtml(query) + '</pre></div>';
-      for (const sec of sections) {
-        bodyHtml += '<div class="ai-thinking-section"><strong>' + escapeHtml(sec.label) + '</strong><pre class="ai-thinking-pre">' + escapeHtml(sec.text) + '</pre></div>';
-      }
-      div.innerHTML =
-        '<div class="ai-msg-label">AI</div>' +
-        '<details class="ai-thinking-details">' +
-          '<summary>Thinking</summary>' +
-          '<div class="ai-thinking-body">' + bodyHtml + '</div>' +
-        '</details>';
-      conv.appendChild(div);
-      scrollEl.scrollTop = scrollEl.scrollHeight;
-    }
-
-    function updateAiStreamingMessage() {
-      // Replace thinking indicator with streaming content
-      const thinking = document.getElementById('aiThinking');
-      if (thinking) {
-        thinking.innerHTML = '<div class="ai-msg-label">AI</div><div class="ai-msg-assistant">' + renderAiMarkdown(aiStreamingContent) + '</div>';
-        const container = document.getElementById('aiMessages');
-        container.scrollTop = container.scrollHeight;
-      }
-    }
-
-    function finalizeAiStreaming(usage) {
-      if (!aiStreaming) return;
-
-      // ─── Pass-1: check for context resolution probe ───────────────────
-      if (aiAgentPassState === 1) {
-        const trimmed = aiStreamingContent.trim();
-        let probe = null;
-        try {
-          const parsed = JSON.parse(trimmed);
-          if (parsed.needs_entities || parsed.needs_area || parsed.needs_skill) {
-            probe = parsed;
-          }
-        } catch {}
-
-        if (probe) {
-          aiStreaming = false;
-          const thinking = document.getElementById('aiThinking');
-          if (thinking) thinking.remove();
-
-          // Resolve all requested context
-          let entityContext = '';
-          let skillContext = '';
-          const sections = [];
-
-          if (probe.needs_entities && Array.isArray(probe.needs_entities)) {
-            entityContext = resolveEntityContext(probe.needs_entities);
-            sections.push({ label: 'Entity query', text: JSON.stringify({ needs_entities: probe.needs_entities }, null, 2) });
-            sections.push({ label: 'Resolved entities', text: entityContext || '(no matching entities found)' });
-          }
-
-          if (probe.needs_area) {
-            const areaCtx = resolveAreaContext(probe.needs_area);
-            entityContext += (entityContext ? '\n\n' : '') + areaCtx;
-            sections.push({ label: 'Area query', text: String(probe.needs_area) });
-            sections.push({ label: 'Area entities', text: areaCtx || '(area not found or empty)' });
-          }
-
-          if (probe.needs_skill) {
-            skillContext = aiSkillMdCache || '(TAE reference not yet loaded — try again shortly)';
-            sections.push({ label: 'TAE reference', text: skillContext.slice(0, 200) + (skillContext.length > 200 ? '\n… (' + skillContext.length + ' chars)' : '') });
-          }
-
-          appendAiThinkingBlockMulti(JSON.stringify(probe, null, 2), sections);
-
-          // Build pass-2 context with all resolved data
-          let pass2Context = aiAgentSystemContext;
-          if (entityContext) pass2Context += '\n\nResolved entity context:\n' + entityContext;
-          if (skillContext) pass2Context += '\n\nTAE API Reference:\n' + skillContext.slice(0, 6000);
-
-          aiAgentPassState = 2;
-          aiStreaming = true;
-          aiStreamingContent = '';
-
-          document.getElementById('aiSendBtn').disabled = true;
-          document.getElementById('aiSendBtn').textContent = 'Stop';
-          document.getElementById('aiSendBtn').onclick = () => { send({ type: 'ai_cancel' }); aiAgentPassState = 0; finalizeAiStreaming(null); };
-
-          appendAiThinking();
-
-          send({
-            type: 'ai_chat',
-            id: Date.now(),
-            messages: aiAgentUserMessages,
-            systemContext: pass2Context,
-          });
-          return;
-        }
-
-        // Pass 1 gave a direct answer — treat as normal
-        aiAgentPassState = 0;
-      } else if (aiAgentPassState === 2) {
-        aiAgentPassState = 0;
-      }
-
-      // ─── Normal finalization ─────────────────────────────────────────
-      aiStreaming = false;
-
-      // Remove thinking element and add final message
-      const thinking = document.getElementById('aiThinking');
-      if (thinking) thinking.remove();
-
-      if (aiStreamingContent.trim()) {
-        aiChatMessages.push({ role: 'assistant', content: aiStreamingContent });
-        appendAiMessage('assistant', aiStreamingContent, usage);
-      }
-
-      aiStreamingContent = '';
-      document.getElementById('aiSendBtn').disabled = false;
-      document.getElementById('aiSendBtn').textContent = 'Send';
-      document.getElementById('aiSendBtn').onclick = sendAiChat;
-    }
-
-    function handleAiChatError(error) {
-      aiStreaming = false;
-      aiAgentPassState = 0;
-      const thinking = document.getElementById('aiThinking');
-      if (thinking) thinking.remove();
-
-      const conv = document.getElementById('aiConversation');
-      const scrollEl = document.getElementById('aiMessages');
-      const div = document.createElement('div');
-      div.className = 'ai-msg';
-      div.innerHTML = '<div class="ai-msg-error">' + escapeHtml(error) + '</div>';
-      conv.appendChild(div);
-      scrollEl.scrollTop = scrollEl.scrollHeight;
-
-      document.getElementById('aiSendBtn').disabled = false;
-      document.getElementById('aiSendBtn').textContent = 'Send';
-      document.getElementById('aiSendBtn').onclick = sendAiChat;
     }
 
     function renderAiMarkdown(text) {
-      // Simple markdown renderer: code blocks, inline code, bold, italic, lists
+      // Small markdown subset: code blocks, inline code, headings, bold, italic, paragraphs
       let html = escapeHtml(text);
 
-      // Code blocks: ```lang\ncode\n```
-      html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
-        const id = 'cb' + Math.random().toString(36).slice(2, 8);
-        return '<pre><code class="lang-' + (lang || 'text') + '">' + code.trim() + '</code><button class="ai-copy-btn" onclick="copyAiCodeBlock(\'' + id + '\')">Copy</button></pre>';
-      });
-
-      // Inline code: `code`
-      html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-
-      // Bold: **text**
+      html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_match, lang, code) =>
+        '<pre><code class="lang-' + (lang || 'text') + '">' + code.replace(/\n$/, '') + '</code><button class="ai-copy-btn" onclick="copyAiCodeBlock()">Copy</button></pre>'
+      );
+      html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+      html = html.replace(/^#{1,4} (.+)$/gm, '<strong>$1</strong>');
       html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      html = html.replace(/(?<![*\w])\*([^*\n]+)\*(?!\*)/g, '<em>$1</em>');
 
-      // Italic: *text*
-      html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
-
-      // Line breaks to paragraphs
-      html = html.split('\n\n').map(p => '<p>' + p + '</p>').join('');
-      html = html.replace(/<p><\/p>/g, '');
-
-      // Newlines within paragraphs
-      html = html.replace(/\n/g, '<br>');
-
-      return html;
+      // Paragraphs and line breaks outside code blocks
+      return html.split(/(<pre>[\s\S]*?<\/pre>)/g).map(part => {
+        if (part.startsWith('<pre>')) return part;
+        return part.split(/\n{2,}/).map(paragraph => paragraph.trim() ? '<p>' + paragraph.replace(/\n/g, '<br>') + '</p>' : '').join('');
+      }).join('');
     }
 
-    function copyAiCodeBlock(id) {
-      // Find the pre element near the button click
-      event.preventDefault();
-      const btn = event.target;
-      const pre = btn.closest('pre');
-      if (!pre) return;
-      const code = pre.querySelector('code');
+    function copyAiCodeBlock() {
+      const button = window.event && window.event.target;
+      if (!button) return;
+      window.event.preventDefault();
+      const code = button.closest('pre')?.querySelector('code');
       if (!code) return;
-      navigator.clipboard.writeText(code.textContent).then(() => {
-        btn.textContent = 'Copied!';
-        setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+      copyText(code.textContent, () => {
+        button.textContent = 'Copied!';
+        setTimeout(() => { button.textContent = 'Copy'; }, 1500);
       });
+    }
+
+    function copyText(text, onDone) {
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(onDone, () => { if (fallbackCopy(text)) onDone(); });
+      } else if (fallbackCopy(text)) {
+        onDone();
+      }
     }
 
     // ─── AI Settings dialog ─────────────────────────
     function showAiSettingsDialog() {
-      // Populate from current config
       document.getElementById('aiSettProvider').value = aiConfig.provider || 'none';
       document.getElementById('aiSettApiKey').value = '';
       document.getElementById('aiSettModel').value = aiConfig.model || '';
       document.getElementById('aiSettCompletionModel').value = aiConfig.completionModel || '';
-      document.getElementById('aiSettStatus').textContent = aiConfig.configured ? '✓ Currently configured' : '✗ Not configured';
-      document.getElementById('aiSettStatus').style.color = aiConfig.configured ? 'var(--green)' : 'var(--text-dim)';
+      document.getElementById('aiSettChatEffort').value = aiConfig.chatEffort || '';
+      document.getElementById('aiSettCompletionEffort').value = aiConfig.completionEffort || '';
+      document.getElementById('aiModelList').innerHTML = '';
+      document.getElementById('aiModelsHint').textContent = 'Leave empty to use the default shown.';
+      const status = document.getElementById('aiSettStatus');
+      status.textContent = aiConfig.configured ? '✓ Configured' : '✗ Not configured';
+      status.style.color = aiConfig.configured ? 'var(--green)' : 'var(--text-dim)';
       updateAiProviderHelp();
+      document.getElementById('mcpInfo').textContent = 'Loading…';
+      send({ type: 'mcp_get_info' });
       document.getElementById('aiSettingsDialog').classList.add('active');
     }
 
     function updateAiProviderHelp() {
       const provider = document.getElementById('aiSettProvider').value;
       const help = document.getElementById('aiProviderHelp');
-      if (!help) return;
-      let html = '';
-      if (provider === 'github') {
-        html = `
-          <strong>GitHub Models</strong> — free with a GitHub account (rate-limited).<br>
-          1. Go to <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener">github.com/settings/personal-access-tokens</a> → <em>Generate new token (fine-grained)</em><br>
-          2. Under <strong>Permissions → Account permissions</strong>, grant <code>Models: Read-only</code>.<br>
-          3. Paste the token below as your API key.<br>
-          <strong>Models:</strong> <code>gpt-4o</code>, <code>gpt-4o-mini</code>, <code>gpt-5</code>, <code>Phi-3.5-MoE-instruct</code>, <code>Mistral-large-2407</code>, etc. See <a href="https://github.com/marketplace/models" target="_blank" rel="noopener">marketplace/models</a>.<br>
-          <em>Note:</em> some models (e.g. <code>gpt-5</code>) require default temperature only.
-        `;
-      } else if (provider === 'openai') {
-        html = `
-          <strong>OpenAI</strong> — paid API access.<br>
-          1. Go to <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com/api-keys</a><br>
-          2. Click <em>Create new secret key</em> and copy it (starts with <code>sk-...</code>).<br>
-          3. Make sure your account has billing enabled.<br>
-          <strong>Models:</strong> <code>gpt-4o</code>, <code>gpt-4o-mini</code>, <code>gpt-4-turbo</code>, <code>o1</code>, <code>o1-mini</code>.<br>
-          For inline completions, prefer a fast model like <code>gpt-4o-mini</code>.
-        `;
-      } else if (provider === 'anthropic') {
-        html = `
-          <strong>Anthropic</strong> — paid API access.<br>
-          1. Go to <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com/settings/keys</a><br>
-          2. Click <em>Create Key</em> and copy it (starts with <code>sk-ant-...</code>).<br>
-          3. Add credits to your workspace if needed.<br>
-          <strong>Models:</strong> <code>claude-sonnet-4-20250514</code>, <code>claude-3-5-sonnet-latest</code>, <code>claude-3-5-haiku-latest</code>, <code>claude-3-opus-latest</code>.
-        `;
-      } else if (provider === 'deepseek') {
-        html = `
-          <strong>DeepSeek</strong> — low-cost API with OpenAI-compatible endpoint.<br>
-          1. Go to <a href="https://platform.deepseek.com/api-keys" target="_blank" rel="noopener">platform.deepseek.com/api-keys</a><br>
-          2. Click <em>Create API Key</em> and copy it (starts with <code>sk-...</code>).<br>
-          3. Add credits to your account if needed.<br>
-          <strong>Models:</strong> <code>deepseek-chat</code> (DeepSeek-V3), <code>deepseek-reasoner</code> (DeepSeek-R1).<br>
-          <em>Note:</em> <code>deepseek-reasoner</code> does not support streaming system prompts — use <code>deepseek-chat</code> for chat.
-        `;
+      const defaults = (aiConfig.defaults && aiConfig.defaults[provider]) || { chat: '', completion: '' };
+      document.getElementById('aiSettModel').placeholder = defaults.chat ? 'Default: ' + defaults.chat : 'Model id (required)';
+      document.getElementById('aiSettCompletionModel').placeholder = defaults.completion
+        ? 'Default: ' + defaults.completion
+        : 'Empty = same as the chat model';
+      const keyHint = document.getElementById('aiSettKeyHint');
+      if (provider === 'none') keyHint.textContent = '';
+      else if (provider === aiConfig.provider && aiConfig.keySet) keyHint.textContent = 'A key is saved (' + aiConfig.keyHint + '). Leave empty to keep it.';
+      else keyHint.textContent = 'Required.';
+      document.getElementById('aiEffortHint').textContent = AI_EFFORT_HELP[provider] || '';
+      if (AI_PROVIDER_HELP[provider]) {
+        help.innerHTML = AI_PROVIDER_HELP[provider];
+        help.style.display = 'block';
       } else {
         help.style.display = 'none';
+      }
+    }
+
+    function loadAiModels() {
+      const provider = document.getElementById('aiSettProvider').value;
+      if (provider === 'none') return;
+      document.getElementById('aiModelsHint').textContent = 'Loading models…';
+      send({ type: 'ai_list_models', provider, apiKey: document.getElementById('aiSettApiKey').value.trim() });
+    }
+
+    function handleAiModels(msg) {
+      const hint = document.getElementById('aiModelsHint');
+      if (msg.provider !== document.getElementById('aiSettProvider').value) return;
+      if (msg.error) {
+        hint.textContent = msg.error;
         return;
       }
-      help.innerHTML = html;
-      help.style.display = 'block';
+      document.getElementById('aiModelList').innerHTML = (msg.models || []).map(model => '<option value="' + escapeHtml(model) + '">').join('');
+      hint.textContent = (msg.models || []).length + ' models available: click a model field to pick one.';
     }
 
     function closeAiSettingsDialog() {
@@ -4935,17 +5250,96 @@ If all necessary context is already provided below, answer directly.
 
     function saveAiSettings() {
       const provider = document.getElementById('aiSettProvider').value;
-      const apiKey = document.getElementById('aiSettApiKey').value;
-      const model = document.getElementById('aiSettModel').value;
-      const completionModel = document.getElementById('aiSettCompletionModel').value;
-
-      const update = { provider };
-      if (apiKey) update.apiKey = apiKey;
-      if (model) update.model = model;
-      update.completionModel = completionModel;
-
-      send({ type: 'ai_set_config', ...update });
+      const apiKey = document.getElementById('aiSettApiKey').value.trim();
+      const keyKnown = provider === aiConfig.provider && aiConfig.keySet;
+      if (provider !== 'none' && !apiKey && !keyKnown) {
+        const status = document.getElementById('aiSettStatus');
+        status.textContent = 'This provider needs an API key.';
+        status.style.color = 'var(--red)';
+        return;
+      }
+      send({
+        type: 'ai_set_config',
+        provider,
+        apiKey,
+        model: document.getElementById('aiSettModel').value.trim(),
+        completionModel: document.getElementById('aiSettCompletionModel').value.trim(),
+        chatEffort: document.getElementById('aiSettChatEffort').value,
+        completionEffort: document.getElementById('aiSettCompletionEffort').value,
+      });
       closeAiSettingsDialog();
+    }
+
+    function renderMcpInfo(info) {
+      mcpInfoCache = info;
+      const container = document.getElementById('mcpInfo');
+      if (!info.hostPort) {
+        container.innerHTML = 'The MCP port is not exposed. In Home Assistant, open the TAE add-on → Configuration → Network, ' +
+          'set a host port for <code>' + escapeHtml(String(info.port)) + '/tcp</code> (e.g. ' + escapeHtml(String(info.port)) + ') and restart TAE.';
+        return;
+      }
+      const url = 'http://' + (location.hostname || 'homeassistant.local') + ':' + info.hostPort + info.path;
+      const tokenShown = mcpTokenVisible ? info.token : '••••••••' + info.token.slice(-4);
+      container.innerHTML =
+        'Endpoint: <code>' + escapeHtml(url) + '</code><br>' +
+        'To connect Claude Code, run once on your computer:' +
+        '<div class="ai-settings-code">claude mcp add --transport http tae ' + escapeHtml(url) +
+          ' --header "Authorization: Bearer ' + escapeHtml(tokenShown) + '"</div>' +
+        '<div class="ai-settings-row" style="gap: 6px;">' +
+          '<button class="btn" onclick="copyMcpCommand(this)">Copy command</button>' +
+          '<button class="btn" onclick="toggleMcpToken()">' + (mcpTokenVisible ? 'Hide token' : 'Show token') + '</button>' +
+          (info.tokenFromOptions ? '' : '<button class="btn" onclick="regenerateMcpToken()">New token</button>') +
+        '</div>' +
+        '<div class="ai-settings-hint">The token gives full access to TAE\'s tools (file edits, service calls), so keep it private. ' +
+          'It travels over plain HTTP, so use it on your local network only.' +
+          (info.tokenFromOptions ? ' It is set by the add-on option <code>mcp_token</code>.' : ' "New token" disconnects existing clients.') + '</div>';
+    }
+
+    function copyMcpCommand(button) {
+      if (!mcpInfoCache || !mcpInfoCache.hostPort) return;
+      const url = 'http://' + (location.hostname || 'homeassistant.local') + ':' + mcpInfoCache.hostPort + mcpInfoCache.path;
+      copyText('claude mcp add --transport http tae ' + url + ' --header "Authorization: Bearer ' + mcpInfoCache.token + '"', () => {
+        button.textContent = 'Copied!';
+        setTimeout(() => { button.textContent = 'Copy command'; }, 1500);
+      });
+    }
+
+    function toggleMcpToken() {
+      mcpTokenVisible = !mcpTokenVisible;
+      if (mcpInfoCache) renderMcpInfo(mcpInfoCache);
+    }
+
+    function regenerateMcpToken() {
+      send({ type: 'mcp_regenerate_token' });
+    }
+
+    /** A tool (or another client) changed a file on disk: refresh editors that have no unsaved edits. */
+    function applyExternalFileChange(msg) {
+      changedSinceReload.add(msg.path);
+      const tab = openTabs.get(msg.path);
+      if (tab) {
+        if (tab.modified) {
+          addLocalLog('warn', 'ui', msg.path + ' was changed on disk by the AI. Your unsaved edits are kept; saving will overwrite the AI change.');
+        } else if (msg.deleted) {
+          closeTab(msg.path, true);
+        } else {
+          tab.model.setValue(msg.content);
+          tab.modified = false;
+          tab.content = msg.content;
+          renderTabs();
+        }
+      } else if (monacoReady) {
+        const model = monaco.editor.getModel(monaco.Uri.parse('file:///' + msg.path));
+        if (model) {
+          if (msg.deleted) {
+            model.dispose();
+            if (window._bgModels) window._bgModels.delete(msg.path);
+          } else {
+            model.setValue(msg.content);
+          }
+        }
+      }
+      updateReloadBadge();
     }
 
     // ─── Snippet completions ────────────────────────
@@ -5067,13 +5461,1428 @@ If all necessary context is already provided below, answer directly.
       });
     }
 
-    // Fetch SKILL.md for AI context once
-    function fetchSkillForAi() {
-      send({ type: 'get_skill_file' });
-      // The existing skill_file handler stores it via handleSkillDownload;
-      // we piggyback: also cache it for AI
-      const origHandler = window._origSkillHandler;
-      // We'll intercept in handleMessage instead — see ai_skill_cache below
+
+    // ─── Entities in the editor: autocomplete, hover, typo warnings ───
+    const ENTITY_INDEX_REFRESH_MS = 60000;
+    const ENTITY_LITERAL_PATTERN = /^([a-z_][a-z0-9_]*)\.([a-z0-9_]+)$/;
+    const ENTITY_MARKER_OWNER = 'tae-entities';
+    const ENTITY_MARKER_DEBOUNCE_MS = 400;
+    const ENTITY_SUGGESTION_MIN_DISTANCE = 3;
+    const ENTITY_SUGGESTION_RATIO = 4;
+    const ENTITY_HOVER_TIMEOUT_MS = 1500;
+    const ENTITY_HOVER_MAX_ATTRIBUTES = 10;
+    const MAX_ENTITY_COMPLETIONS = 3000;
+    let entityIndex = { list: [], byId: new Map(), domains: new Set(), services: new Set(), loaded: false };
+    let entityStateRequestId = 0;
+    const entityStateWaiters = new Map();
+    const entityMarkerTimers = new Map();
+
+    function requestEntityIndex() {
+      send({ type: 'get_entity_index' });
+    }
+
+    function handleEntityIndex(msg) {
+      const list = (msg.entities || []).slice().sort((left, right) => left.entityId.localeCompare(right.entityId));
+      entityIndex = {
+        list,
+        byId: new Map(list.map(entity => [entity.entityId, entity])),
+        domains: new Set(list.map(entity => entity.domain)),
+        services: new Set(msg.services || []),
+        loaded: true,
+      };
+      for (const tab of openTabs.values()) updateEntityMarkers(tab.model);
+    }
+
+    function requestEntityState(entityId) {
+      return new Promise(resolve => {
+        entityStateRequestId++;
+        const requestId = entityStateRequestId;
+        const timer = setTimeout(() => { entityStateWaiters.delete(requestId); resolve(null); }, ENTITY_HOVER_TIMEOUT_MS);
+        entityStateWaiters.set(requestId, state => { clearTimeout(timer); resolve(state); });
+        send({ type: 'get_entity', entityId, requestId });
+      });
+    }
+
+    function handleEntityState(msg) {
+      const waiter = entityStateWaiters.get(msg.requestId);
+      if (waiter) {
+        entityStateWaiters.delete(msg.requestId);
+        waiter(msg.state);
+      }
+    }
+
+    function editDistance(left, right) {
+      let previous = Array.from({ length: right.length + 1 }, (_, iColumn) => iColumn);
+      for (let iRow = 1; iRow <= left.length; iRow++) {
+        const current = [iRow];
+        for (let iColumn = 1; iColumn <= right.length; iColumn++) {
+          const cost = left[iRow - 1] === right[iColumn - 1] ? 0 : 1;
+          current.push(Math.min(previous[iColumn] + 1, current[iColumn - 1] + 1, previous[iColumn - 1] + cost));
+        }
+        previous = current;
+      }
+      return previous[right.length];
+    }
+
+    function suggestEntityId(entityId) {
+      const domain = entityId.split('.')[0];
+      const limit = Math.max(ENTITY_SUGGESTION_MIN_DISTANCE, Math.floor(entityId.length / ENTITY_SUGGESTION_RATIO));
+      let best = null;
+      let bestDistance = Number.MAX_SAFE_INTEGER;
+      for (const entity of entityIndex.list) {
+        if (entity.domain !== domain) continue;
+        const distance = editDistance(entityId, entity.entityId);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          best = entity.entityId;
+        }
+      }
+      return bestDistance <= limit ? best : null;
+    }
+
+    /** Unknown-entity problem for a string literal, or null. Same rules as the server's type_check. */
+    function entityLiteralProblem(text) {
+      const match = ENTITY_LITERAL_PATTERN.exec(text);
+      if (!match || !entityIndex.domains.has(match[1])) return null;
+      if (entityIndex.byId.has(text) || entityIndex.services.has(text)) return null;
+      const suggestion = suggestEntityId(text);
+      return { message: "Unknown entity id '" + text + "'" + (suggestion ? " — did you mean '" + suggestion + "'?" : ''), suggestion };
+    }
+
+    /** String literals on one line: inner text with 1-based columns. */
+    function stringLiteralsInLine(lineText) {
+      const literals = [];
+      const pattern = /(['"`])((?:\\.|(?!\1)[^\\])*)\1/g;
+      let match;
+      while ((match = pattern.exec(lineText)) !== null) {
+        if (match[1] === '`' && match[2].includes('${')) continue;
+        const startColumn = match.index + 2;
+        literals.push({ text: match[2], startColumn, endColumn: startColumn + match[2].length });
+      }
+      return literals;
+    }
+
+    function updateEntityMarkers(model) {
+      if (!monacoReady || !model || model.isDisposed() || model.getLanguageId() !== 'typescript') return;
+      if (!entityIndex.loaded) return;
+      const markers = [];
+      const lineCount = model.getLineCount();
+      for (let iLine = 1; iLine <= lineCount; iLine++) {
+        const lineText = model.getLineContent(iLine);
+        const trimmed = lineText.trim();
+        if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('import ')) continue;
+        for (const literal of stringLiteralsInLine(lineText)) {
+          const problem = entityLiteralProblem(literal.text);
+          if (!problem) continue;
+          markers.push({
+            severity: monaco.MarkerSeverity.Warning,
+            message: problem.message,
+            source: 'TAE',
+            startLineNumber: iLine,
+            endLineNumber: iLine,
+            startColumn: literal.startColumn,
+            endColumn: literal.endColumn,
+          });
+        }
+      }
+      monaco.editor.setModelMarkers(model, ENTITY_MARKER_OWNER, markers);
+    }
+
+    function scheduleEntityMarkers(model) {
+      const key = model.uri.toString();
+      clearTimeout(entityMarkerTimers.get(key));
+      entityMarkerTimers.set(key, setTimeout(() => {
+        entityMarkerTimers.delete(key);
+        updateEntityMarkers(model);
+      }, ENTITY_MARKER_DEBOUNCE_MS));
+    }
+
+    function literalAt(model, position) {
+      const lineText = model.getLineContent(position.lineNumber);
+      return stringLiteralsInLine(lineText).find(literal => position.column >= literal.startColumn && position.column <= literal.endColumn) || null;
+    }
+
+    function formatEntityHover(entity, state) {
+      const name = (state && state.attributes && state.attributes.friendly_name) || entity.name || entity.entityId;
+      const current = state ? state.state : entity.state;
+      const unit = (state && state.attributes && state.attributes.unit_of_measurement) || entity.unit || '';
+      const lines = ['**' + name + '**', '`' + entity.entityId + '` — state **' + current + (unit ? ' ' + unit : '') + '**'];
+      const where = [entity.areaName, entity.deviceName && entity.deviceName !== name ? entity.deviceName : ''].filter(Boolean).join(' · ');
+      if (where) lines.push(where);
+      if (state && state.last_changed) lines.push('Changed ' + new Date(state.last_changed).toLocaleString());
+      if (state && state.attributes) {
+        const attributes = Object.entries(state.attributes).filter(([key]) => key !== 'friendly_name');
+        if (attributes.length) {
+          const shown = attributes.slice(0, ENTITY_HOVER_MAX_ATTRIBUTES).map(([key, value]) => '- ' + key + ': `' + JSON.stringify(value).slice(0, 80) + '`');
+          if (attributes.length > ENTITY_HOVER_MAX_ATTRIBUTES) shown.push('- … ' + (attributes.length - ENTITY_HOVER_MAX_ATTRIBUTES) + ' more');
+          lines.push(shown.join('\n'));
+        }
+      }
+      return lines.join('\n\n');
+    }
+
+    function registerEntityProviders() {
+      monaco.languages.registerCompletionItemProvider('typescript', {
+        triggerCharacters: ["'", '"', '`', '.', '_'],
+        provideCompletionItems(model, position) {
+          if (!entityIndex.loaded) return { suggestions: [] };
+          const prefix = model.getValueInRange({ startLineNumber: position.lineNumber, startColumn: 1, endLineNumber: position.lineNumber, endColumn: position.column });
+          const match = /(['"`])([a-z0-9_.]*)$/.exec(prefix);
+          if (!match) return { suggestions: [] };
+          const quote = match[1];
+          const before = prefix.slice(0, match.index);
+          if ((before.split(quote).length - 1) % 2 !== 0) return { suggestions: [] }; //< that quote closes a string
+          if (/^\s*import\b|\bfrom\s*$|\brequire\(\s*$/.test(before)) return { suggestions: [] };
+          const typed = match[2];
+          const range = { startLineNumber: position.lineNumber, endLineNumber: position.lineNumber, startColumn: position.column - typed.length, endColumn: position.column };
+          const domain = typed.includes('.') ? typed.split('.')[0] : '';
+          const candidates = domain ? entityIndex.list.filter(entity => entity.domain === domain) : entityIndex.list;
+          return {
+            suggestions: candidates.slice(0, MAX_ENTITY_COMPLETIONS).map(entity => ({
+              label: { label: entity.entityId, description: entity.name },
+              kind: monaco.languages.CompletionItemKind.Value,
+              insertText: entity.entityId,
+              filterText: entity.entityId + ' ' + entity.name,
+              detail: (entity.name || entity.entityId) + ' — ' + entity.state + (entity.unit ? ' ' + entity.unit : ''),
+              documentation: [entity.areaName, entity.deviceName].filter(Boolean).join(' · '),
+              range,
+            })),
+          };
+        },
+      });
+
+      monaco.languages.registerHoverProvider('typescript', {
+        async provideHover(model, position) {
+          if (!entityIndex.loaded) return null;
+          const literal = literalAt(model, position);
+          if (!literal || !ENTITY_LITERAL_PATTERN.test(literal.text)) return null;
+          const range = { startLineNumber: position.lineNumber, endLineNumber: position.lineNumber, startColumn: literal.startColumn, endColumn: literal.endColumn };
+          const entity = entityIndex.byId.get(literal.text);
+          if (!entity) {
+            const problem = entityLiteralProblem(literal.text);
+            return problem ? { range, contents: [{ value: problem.message }] } : null;
+          }
+          const state = await requestEntityState(entity.entityId);
+          return { range, contents: [{ value: formatEntityHover(entity, state) }] };
+        },
+      });
+
+      monaco.languages.registerCodeActionProvider('typescript', {
+        provideCodeActions(model, _range, context) {
+          const actions = [];
+          for (const marker of context.markers) {
+            if (!String(marker.message).startsWith('Unknown entity id')) continue;
+            const text = model.getValueInRange(marker);
+            const suggestion = suggestEntityId(text);
+            if (!suggestion) continue;
+            actions.push({
+              title: "Change to '" + suggestion + "'",
+              kind: 'quickfix',
+              diagnostics: [marker],
+              isPreferred: true,
+              edit: { edits: [{ resource: model.uri, textEdit: { range: marker, text: suggestion }, versionId: model.getVersionId() }] },
+            });
+          }
+          return { actions, dispose() {} };
+        },
+      });
+    }
+
+    setInterval(() => {
+      if (connected && !document.hidden) requestEntityIndex();
+    }, ENTITY_INDEX_REFRESH_MS);
+
+    // ─── Shared helpers ─────────────────────────────
+    function allWorkspaceFiles() {
+      const out = [];
+      const walk = (items) => {
+        for (const item of items || []) {
+          if (item.isDirectory) walk(item.children);
+          else out.push(item.path);
+        }
+      };
+      walk(currentFiles);
+      return out;
+    }
+
+    /** Automation ids whose class (or a parent automation class) is declared in this file. */
+    function automationsDefinedIn(file) {
+      if (!file) return [];
+      return automations.filter(automation => {
+        const info = automationClassMap.get(automation.className);
+        return info && info.file === file;
+      }).map(automation => automation.id);
+    }
+
+    function formatClock(epochMs) {
+      return new Date(epochMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+
+    /** Simulated offset as m:ss or h:mm:ss. */
+    function formatOffset(ms) {
+      const totalSeconds = Math.floor(ms / 1000);
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const secondsPart = String(totalSeconds % 60).padStart(2, '0');
+      return hours ? hours + ':' + String(minutes).padStart(2, '0') + ':' + secondsPart : minutes + ':' + secondsPart;
+    }
+
+    function formatSeconds(totalSeconds) {
+      if (totalSeconds >= 3600 && totalSeconds % 3600 === 0) return (totalSeconds / 3600) + 'h';
+      if (totalSeconds >= 60) {
+        const minutes = Math.floor(totalSeconds / 60);
+        const rest = totalSeconds - minutes * 60;
+        return minutes + 'm' + (rest ? ' ' + rest + 's' : '');
+      }
+      return totalSeconds + 's';
+    }
+
+    function ensureBottomPanelHeight(minHeight) {
+      const panel = document.getElementById('bottomPanel');
+      if (panel.classList.contains('collapsed')) toggleBottomPanel();
+      if (!isTabletSize() && panel.offsetHeight < minHeight) {
+        panel.style.height = minHeight + 'px';
+        if (monacoEditor) setTimeout(() => monacoEditor.layout(), 50);
+      }
+    }
+
+    // ─── Tests ──────────────────────────────────────
+    const TEST_PANEL_MIN_HEIGHT = 420;
+    const TEST_STEP_TYPES = [
+      ['set', 'Set state'],
+      ['wait', 'Wait'],
+      ['event', 'Fire event'],
+      ['expect_state', 'Expect state'],
+      ['expect_service', 'Expect service call'],
+      ['expect_no_service', 'Expect no service call'],
+    ];
+    const WAIT_UNITS = [['s', 1], ['min', 60], ['h', 3600]];
+    const DOMAIN_STATES = {
+      binary_sensor: ['on', 'off', 'unavailable'], light: ['on', 'off', 'unavailable'], switch: ['on', 'off'], fan: ['on', 'off'],
+      input_boolean: ['on', 'off'], cover: ['open', 'closed', 'opening', 'closing'], lock: ['locked', 'unlocked'],
+      media_player: ['on', 'off', 'playing', 'paused', 'idle', 'unavailable'], person: ['home', 'not_home'],
+      device_tracker: ['home', 'not_home'], sun: ['above_horizon', 'below_horizon'], climate: ['off', 'heat', 'cool', 'auto'],
+      vacuum: ['cleaning', 'docked', 'returning', 'idle'], alarm_control_panel: ['disarmed', 'armed_home', 'armed_away', 'triggered'],
+    };
+    let testEntries = [];
+    let testDraft = null;
+    let testDraftDirty = false;
+    let testShownResult = null;
+    const testsRunning = new Set();
+    let testSaveRequestId = 0;
+    let testPendingRunAfterSave = null;
+
+    function handleTests(list) {
+      testEntries = list || [];
+      if (testDraft && testDraft.id && !testDraftDirty) {
+        const entry = testEntries.find(item => item.scenario.id === testDraft.id);
+        if (entry) {
+          testDraft = JSON.parse(JSON.stringify(entry.scenario));
+          if (!testShownResult && entry.lastResult) testShownResult = entry.lastResult;
+          renderTestEditor();
+        }
+      }
+      renderTestsList();
+      updateTestsBadge();
+    }
+
+    function updateTestsBadge() {
+      const failing = testEntries.filter(entry => entry.lastResult && !entry.lastResult.passed).length;
+      const badge = document.getElementById('testsBadge');
+      if (!badge) return;
+      badge.textContent = failing ? '✗' + failing : (testEntries.length ? '✓' : '');
+      badge.className = 'panel-badge' + (failing ? '' : ' ok');
+    }
+
+    function testStatus(entry) {
+      if (testsRunning.has(entry.scenario.id)) return 'running';
+      if (!entry.lastResult) return '';
+      return entry.lastResult.passed ? 'passed' : 'failed';
+    }
+
+    function renderTestsList() {
+      const body = document.getElementById('testsListBody');
+      if (!body) return;
+      if (testEntries.length === 0) {
+        body.innerHTML = '<div class="tests-empty">No tests yet. A test sets entity states, waits (instantly), and checks which services your automations call — without touching real devices.<br><br>Click <b>+ New test</b>.</div>';
+        return;
+      }
+      const groups = new Map();
+      for (const entry of testEntries) {
+        const file = entry.scenario.file || '';
+        if (!groups.has(file)) groups.set(file, []);
+        groups.get(file).push(entry);
+      }
+      const files = Array.from(groups.keys()).sort((left, right) => {
+        if (left === activeTab) return -1;
+        if (right === activeTab) return 1;
+        return left.localeCompare(right);
+      });
+      body.innerHTML = files.map(file => {
+        const label = file ? (file === activeTab ? 'This file · ' : '') + file : 'No file';
+        const items = groups.get(file).map(entry => {
+          const selected = testDraft && testDraft.id === entry.scenario.id ? ' selected' : '';
+          const result = entry.lastResult;
+          const title = result ? (result.passed ? 'Passed' : 'Failed') + ' · ' + new Date(result.ranAt).toLocaleString() : 'Not run yet';
+          return '<div class="tests-item' + selected + '" data-id="' + escapeAttr(entry.scenario.id) + '" onclick="selectTest(this.dataset.id)" title="' + escapeAttr(title) + '">' +
+            '<span class="test-dot ' + testStatus(entry) + '"></span>' +
+            '<span class="tests-name">' + escapeHtml(entry.scenario.name) + '</span>' +
+            (entry.scenario.liveCalls ? '<span class="tests-live-tag" title="Sends its service calls to Home Assistant">HA</span>' : '') +
+            '<button class="tests-run" title="Run" onclick="event.stopPropagation(); runTest(this.parentElement.dataset.id)">▶</button>' +
+          '</div>';
+        }).join('');
+        return '<div class="tests-group" title="' + escapeAttr(label) + '">' + escapeHtml(label) + '</div>' + items;
+      }).join('');
+    }
+
+    function confirmDiscardTestDraft() {
+      return !testDraftDirty || confirm('Discard the unsaved changes to "' + (testDraft && testDraft.name) + '"?');
+    }
+
+    function selectTest(id) {
+      if (testDraft && testDraft.id === id) return;
+      if (!confirmDiscardTestDraft()) return;
+      const entry = testEntries.find(item => item.scenario.id === id);
+      if (!entry) return;
+      testDraft = JSON.parse(JSON.stringify(entry.scenario));
+      testDraftDirty = false;
+      testShownResult = entry.lastResult;
+      renderTestsList();
+      renderTestEditor();
+      renderTestResult();
+    }
+
+    function newTestScenario() {
+      if (!confirmDiscardTestDraft()) return;
+      const file = activeTab && activeTab.endsWith('.ts') ? activeTab : '';
+      testDraft = {
+        name: 'New test',
+        file,
+        automations: automationsDefinedIn(file),
+        startTime: '',
+        applyEffects: true,
+        liveCalls: false,
+        realTimeWaits: false,
+        initial: [],
+        steps: [
+          { type: 'set', entityId: '', state: '' },
+          { type: 'expect_service', service: '', entityId: '' },
+        ],
+      };
+      testDraftDirty = true;
+      testShownResult = null;
+      renderTestsList();
+      renderTestEditor();
+      renderTestResult();
+      const title = document.querySelector('.tests-title');
+      if (title) { title.focus(); title.select(); }
+    }
+
+    function duplicateTest() {
+      if (!testDraft) return;
+      const copy = JSON.parse(JSON.stringify(testDraft));
+      delete copy.id;
+      copy.name = testDraft.name + ' (copy)';
+      testDraft = copy;
+      testDraftDirty = true;
+      testShownResult = null;
+      renderTestsList();
+      renderTestEditor();
+      renderTestResult();
+    }
+
+    function deleteTest() {
+      if (!testDraft) return;
+      if (!testDraft.id) {
+        testDraft = null;
+        testDraftDirty = false;
+        renderTestEditor();
+        renderTestResult();
+        return;
+      }
+      if (!confirm('Delete the test "' + testDraft.name + '"?')) return;
+      send({ type: 'test_delete', id: testDraft.id });
+      testDraft = null;
+      testDraftDirty = false;
+      testShownResult = null;
+      renderTestEditor();
+      renderTestResult();
+    }
+
+    function markTestDirty() {
+      if (!testDraftDirty) {
+        testDraftDirty = true;
+        const marker = document.getElementById('testDirtyMarker');
+        if (marker) marker.textContent = '● unsaved';
+        const saveButton = document.getElementById('testSaveBtn');
+        if (saveButton) saveButton.classList.add('btn-accent');
+      }
+    }
+
+    function stateSuggestions(entityId) {
+      const domain = (entityId || '').split('.')[0];
+      const values = new Set(DOMAIN_STATES[domain] || []);
+      const current = entityIndex.byId.get(entityId);
+      if (current) values.add(current.state);
+      return Array.from(values);
+    }
+
+    // ─── Test field suggestions ─────────────────────
+    const SUGGEST_MAX_ITEMS = 60;
+    const SUGGEST_ENTITY_MIN_WIDTH = 420;
+    const SUGGEST_MIN_WIDTH = 160;
+    const SUGGEST_GAP_PX = 2;
+    const SUGGEST_MAX_HEIGHT = 260;
+    const SUGGEST_EDGE_PX = 8; //< keep this far from the window edge
+    let suggestInput = null;
+    let suggestItems = [];
+    let suggestSelected = 0;
+
+    function setupTestSuggest() {
+      const popup = document.createElement('div');
+      popup.className = 'suggest-popup';
+      popup.id = 'testSuggest';
+      document.body.appendChild(popup);
+      const editor = document.getElementById('testsEditor');
+      if (!editor) return;
+      editor.addEventListener('focusin', (e) => {
+        if (e.target.dataset && e.target.dataset.suggest) openTestSuggest(e.target);
+      });
+      editor.addEventListener('input', (e) => {
+        if (e.target.dataset && e.target.dataset.suggest) openTestSuggest(e.target);
+      });
+      editor.addEventListener('focusout', (e) => {
+        if (e.target === suggestInput) closeTestSuggest();
+      });
+      editor.addEventListener('keydown', handleTestSuggestKey, true);
+      const follow = () => {
+        if (suggestInput && popup.classList.contains('active')) openTestSuggest(suggestInput);
+      };
+      editor.addEventListener('scroll', follow);
+      window.addEventListener('resize', follow);
+    }
+
+    function suggestionsFor(input) {
+      const query = input.value.trim().toLowerCase();
+      const kind = input.dataset.suggest;
+      if (kind === 'entity') {
+        const starts = [], contains = [];
+        for (const entity of entityIndex.list) {
+          const id = entity.entityId.toLowerCase();
+          const name = (entity.name || '').toLowerCase();
+          if (!query || id.startsWith(query) || id.split('.')[1].startsWith(query)) starts.push(entity);
+          else if (id.includes(query) || name.includes(query)) contains.push(entity);
+          if (starts.length >= SUGGEST_MAX_ITEMS) break;
+        }
+        return starts.concat(contains).slice(0, SUGGEST_MAX_ITEMS)
+          .map(entity => ({ value: entity.entityId, name: entity.name || '', hint: entity.state }));
+      }
+      if (kind === 'state') {
+        const row = input.closest('.tests-row');
+        const entityField = row && row.querySelector('[data-suggest="entity"]');
+        return stateSuggestions(entityField ? entityField.value.trim() : '')
+          .filter(value => !query || value.toLowerCase().includes(query))
+          .map(value => ({ value, name: '', hint: '' }));
+      }
+      return Array.from(entityIndex.services).sort()
+        .filter(service => !query || service.includes(query))
+        .slice(0, SUGGEST_MAX_ITEMS)
+        .map(service => ({ value: service, name: '', hint: '' }));
+    }
+
+    function highlightMatch(text, query) {
+      const index = query ? text.toLowerCase().indexOf(query) : -1;
+      if (index < 0) return escapeHtml(text);
+      return escapeHtml(text.slice(0, index)) + '<b>' + escapeHtml(text.slice(index, index + query.length)) + '</b>' + escapeHtml(text.slice(index + query.length));
+    }
+
+    function openTestSuggest(input) {
+      const popup = document.getElementById('testSuggest');
+      if (!popup) return;
+      suggestInput = input;
+      suggestItems = suggestionsFor(input);
+      const exact = suggestItems.length === 1 && suggestItems[0].value === input.value.trim();
+      if (suggestItems.length === 0 || exact) {
+        popup.classList.remove('active');
+        return;
+      }
+      suggestSelected = Math.min(suggestSelected, suggestItems.length - 1);
+      const query = input.value.trim().toLowerCase();
+      popup.innerHTML = suggestItems.map((item, iItem) =>
+        '<div class="ac-item' + (iItem === suggestSelected ? ' selected' : '') + '" onmousedown="event.preventDefault(); acceptTestSuggest(' + iItem + ')">' +
+          '<span class="ac-label">' + highlightMatch(item.value, query) + '</span>' +
+          (item.name ? '<span class="ac-name">' + highlightMatch(item.name, query) + '</span>' : '') +
+          (item.hint ? '<span class="ac-hint">' + escapeHtml(item.hint) + '</span>' : '') +
+        '</div>'
+      ).join('');
+      const rect = input.getBoundingClientRect();
+      const minWidth = input.dataset.suggest === 'entity' ? SUGGEST_ENTITY_MIN_WIDTH : SUGGEST_MIN_WIDTH;
+      const width = Math.min(Math.max(rect.width, minWidth), window.innerWidth - rect.left - SUGGEST_GAP_PX * 4);
+      popup.style.left = rect.left + 'px';
+      popup.style.width = width + 'px';
+      popup.classList.add('active');
+      const needed = Math.min(popup.scrollHeight, SUGGEST_MAX_HEIGHT);
+      const spaceBelow = window.innerHeight - rect.bottom - SUGGEST_GAP_PX - SUGGEST_EDGE_PX;
+      const spaceAbove = rect.top - SUGGEST_GAP_PX - SUGGEST_EDGE_PX;
+      if (spaceBelow < needed && spaceAbove > spaceBelow) {
+        popup.style.top = '';
+        popup.style.bottom = (window.innerHeight - rect.top + SUGGEST_GAP_PX) + 'px';
+        popup.style.maxHeight = Math.min(SUGGEST_MAX_HEIGHT, spaceAbove) + 'px';
+      } else {
+        popup.style.bottom = '';
+        popup.style.top = (rect.bottom + SUGGEST_GAP_PX) + 'px';
+        popup.style.maxHeight = Math.min(SUGGEST_MAX_HEIGHT, spaceBelow) + 'px';
+      }
+      const selected = popup.querySelector('.ac-item.selected');
+      if (selected) selected.scrollIntoView({ block: 'nearest' });
+    }
+
+    function closeTestSuggest() {
+      const popup = document.getElementById('testSuggest');
+      if (popup) popup.classList.remove('active');
+      suggestInput = null;
+      suggestSelected = 0;
+    }
+
+    function acceptTestSuggest(iItem) {
+      const input = suggestInput;
+      const item = suggestItems[iItem];
+      if (!input || !item) return;
+      input.value = item.value;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      closeTestSuggest();
+      const popup = document.getElementById('testSuggest');
+      if (popup) popup.classList.remove('active');
+    }
+
+    function handleTestSuggestKey(e) {
+      const popup = document.getElementById('testSuggest');
+      const open = popup && popup.classList.contains('active') && e.target === suggestInput;
+      if (!open) {
+        if (e.key === 'ArrowDown' && e.target.dataset && e.target.dataset.suggest) {
+          e.preventDefault();
+          openTestSuggest(e.target);
+        }
+        return;
+      }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const step = e.key === 'ArrowDown' ? 1 : -1;
+        suggestSelected = (suggestSelected + step + suggestItems.length) % suggestItems.length;
+        openTestSuggest(suggestInput);
+      } else if (e.key === 'Enter' || e.key === 'Tab') {
+        if (e.key === 'Enter') e.preventDefault();
+        acceptTestSuggest(suggestSelected);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        popup.classList.remove('active');
+      }
+    }
+
+    function testRowTarget(element) {
+      const row = element.closest('.tests-row');
+      const collection = row.dataset.collection === 'initial' ? testDraft.initial : testDraft.steps;
+      return { item: collection[Number(row.dataset.index)], collection, index: Number(row.dataset.index) };
+    }
+
+    function updateTestRowField(element, field) {
+      const { item } = testRowTarget(element);
+      if (field === 'attributes' || field === 'data') {
+        const text = element.value.trim();
+        if (!text) {
+          delete item[field];
+          element.classList.remove('invalid');
+        } else {
+          try {
+            const parsed = JSON.parse(text);
+            if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('not an object');
+            item[field] = parsed;
+            element.classList.remove('invalid');
+          } catch {
+            element.classList.add('invalid');
+          }
+        }
+      } else if (field === 'waitValue' || field === 'waitUnit') {
+        const row = element.closest('.tests-row');
+        const value = Number(row.querySelector('.tests-input.seconds').value) || 0;
+        const unit = Number(row.querySelector('.wait-unit').value) || 1;
+        item.seconds = Math.max(0, Math.round(value * unit));
+      } else {
+        item[field] = element.value.trim();
+      }
+      markTestDirty();
+    }
+
+    function changeTestStepType(element) {
+      const { collection, index } = testRowTarget(element);
+      const previous = collection[index];
+      const type = element.value;
+      const entityId = previous.entityId || '';
+      if (type === 'set') collection[index] = { type: 'set', entityId, state: '' };
+      else if (type === 'wait') collection[index] = { type: 'wait', seconds: 60 };
+      else if (type === 'event') collection[index] = { type: 'event', eventType: '' };
+      else if (type === 'expect_state') collection[index] = { type: 'expect_state', entityId, state: '' };
+      else collection[index] = { type: 'expect_service', service: '', entityId, ...(type === 'expect_no_service' ? { not: true } : {}) };
+      markTestDirty();
+      renderTestEditor();
+    }
+
+    function addTestRow(collectionName) {
+      if (collectionName === 'initial') testDraft.initial.push({ entityId: '', state: '' });
+      else {
+        const last = testDraft.steps[testDraft.steps.length - 1];
+        testDraft.steps.push(last && last.type === 'set' ? { type: 'wait', seconds: 60 } : { type: 'set', entityId: '', state: '' });
+      }
+      markTestDirty();
+      renderTestEditor();
+    }
+
+    function moveTestRow(element, delta) {
+      const { collection, index } = testRowTarget(element);
+      const target = index + delta;
+      if (target < 0 || target >= collection.length) return;
+      const [moved] = collection.splice(index, 1);
+      collection.splice(target, 0, moved);
+      markTestDirty();
+      renderTestEditor();
+    }
+
+    function removeTestRow(element) {
+      const { collection, index } = testRowTarget(element);
+      collection.splice(index, 1);
+      markTestDirty();
+      renderTestEditor();
+    }
+
+    function fillCurrentState(element) {
+      const { item } = testRowTarget(element);
+      const entity = entityIndex.byId.get(item.entityId);
+      if (!entity) {
+        addLocalLog('warn', 'tests', 'Pick a known entity first');
+        return;
+      }
+      item.state = entity.state;
+      markTestDirty();
+      renderTestEditor();
+    }
+
+    function toggleTestAutomation(id) {
+      const selected = new Set(testDraft.automations);
+      if (selected.has(id)) selected.delete(id);
+      else selected.add(id);
+      testDraft.automations = automations.map(automation => automation.id).filter(automationId => selected.has(automationId));
+      markTestDirty();
+      renderTestEditor();
+    }
+
+    function setTestAutomations(mode) {
+      testDraft.automations = mode === 'file' ? automationsDefinedIn(testDraft.file) : [];
+      markTestDirty();
+      renderTestEditor();
+    }
+
+    function waitParts(seconds) {
+      for (let iUnit = WAIT_UNITS.length - 1; iUnit >= 0; iUnit--) {
+        const [label, size] = WAIT_UNITS[iUnit];
+        if (seconds >= size && seconds % size === 0) return { value: seconds / size, size, label };
+      }
+      return { value: seconds, size: 1, label: 's' };
+    }
+
+    function testInput(cls, value, field, placeholder, extra) {
+      return '<input class="tests-input ' + cls + '" value="' + escapeAttr(value == null ? '' : String(value)) + '" placeholder="' + escapeAttr(placeholder) + '" ' +
+        'oninput="updateTestRowField(this, \'' + field + '\')" spellcheck="false" ' + (extra || '') + '>';
+    }
+
+    function entityInput(value, field) {
+      return testInput('entity', value, field || 'entityId', 'entity id', 'data-suggest="entity" autocomplete="off"');
+    }
+
+    function stateInput(value) {
+      return testInput('state', value, 'state', 'state', 'data-suggest="state" autocomplete="off"');
+    }
+
+    function jsonInput(value, field, placeholder) {
+      return testInput('attributes', value ? JSON.stringify(value) : '', field, placeholder);
+    }
+
+    function rowActions(collectionName) {
+      return '<span class="row-actions">' +
+        (collectionName === 'steps' ? '<button class="row-btn" title="Move up" onclick="moveTestRow(this, -1)">▲</button><button class="row-btn" title="Move down" onclick="moveTestRow(this, 1)">▼</button>' : '') +
+        '<button class="row-btn danger" title="Remove" onclick="removeTestRow(this)">✕</button></span>';
+    }
+
+    function stepResultFor(iStep) {
+      if (!testShownResult) return null;
+      return testShownResult.expectations.find(expectation => expectation.step === iStep) || null;
+    }
+
+    function renderStepRow(step, iStep) {
+      const typeKey = step.type === 'expect_service' && step.not ? 'expect_no_service' : step.type;
+      const typeSelect = '<select class="tests-select" onchange="changeTestStepType(this)">' +
+        TEST_STEP_TYPES.map(([key, label]) => '<option value="' + key + '"' + (key === typeKey ? ' selected' : '') + '>' + label + '</option>').join('') + '</select>';
+      let fields = '';
+      if (step.type === 'set') {
+        fields = entityInput(step.entityId) + '<span class="tests-hint">→</span>' + stateInput(step.state) + jsonInput(step.attributes, 'attributes', 'attributes');
+      } else if (step.type === 'wait') {
+        const parts = waitParts(step.seconds || 0);
+        fields = '<input class="tests-input seconds" type="number" min="0" value="' + parts.value + '" oninput="updateTestRowField(this, \'waitValue\')">' +
+          '<select class="tests-select wait-unit" onchange="updateTestRowField(this, \'waitUnit\')">' +
+          WAIT_UNITS.map(([label, size]) => '<option value="' + size + '"' + (size === parts.size ? ' selected' : '') + '>' + label + '</option>').join('') + '</select>' +
+          (testDraft.liveCalls && testDraft.realTimeWaits
+            ? '<span class="tests-hint" title="Waits take real time in this test">real time</span>'
+            : '<span class="tests-hint" title="The clock is simulated, so waits finish instantly">instant</span>');
+      } else if (step.type === 'event') {
+        fields = testInput('service', step.eventType, 'eventType', 'event type') + jsonInput(step.data, 'data', 'event data');
+      } else if (step.type === 'expect_state') {
+        fields = entityInput(step.entityId) + '<span class="tests-hint">is</span>' + stateInput(step.state);
+      } else {
+        fields = testInput('service', step.service, 'service', 'light.turn_on', 'data-suggest="service" autocomplete="off"') +
+          '<span class="tests-hint">on</span>' + entityInput(step.entityId).replace('placeholder="entity id"', 'placeholder="any entity" title="Counts calls since the previous service check"');
+      }
+      const result = stepResultFor(iStep);
+      const resultMark = result ? '<span class="step-result ' + (result.passed ? 'passed' : 'failed') + '" title="' + escapeAttr(result.message) + '">' + (result.passed ? '✓' : '✗') + '</span>' : '<span class="step-result"></span>';
+      return '<div class="tests-row" data-collection="steps" data-index="' + iStep + '" id="testStep' + iStep + '">' +
+        '<span class="step-index">' + (iStep + 1) + '</span>' + resultMark + typeSelect + '<span class="row-fields">' + fields + '</span>' + rowActions('steps') + '</div>';
+    }
+
+    function renderTestEditor() {
+      const editor = document.getElementById('testsEditor');
+      if (!editor) return;
+      if (!testDraft) {
+        editor.innerHTML = '<div class="tests-empty">Select a test, or create one with <b>+ New test</b>.<br><br>' +
+          'Tests run your automations in an isolated copy: entity states are simulated, waits finish instantly, and service calls are recorded instead of sent, so no device reacts. Each test is kept with its file.</div>';
+        return;
+      }
+      const files = allWorkspaceFiles().filter(file => file.endsWith('.ts'));
+      if (testDraft.file && !files.includes(testDraft.file)) files.unshift(testDraft.file);
+      const fileOptions = '<option value="">(no file)</option>' + files.map(file => '<option value="' + escapeAttr(file) + '"' + (file === testDraft.file ? ' selected' : '') + '>' + escapeHtml(file) + '</option>').join('');
+      const selected = new Set(testDraft.automations);
+      const chips = automations.map(automation =>
+        '<button class="tests-chip' + (selected.has(automation.id) ? ' on' : '') + '" data-id="' + escapeAttr(automation.id) + '" onclick="toggleTestAutomation(this.dataset.id)">' + escapeHtml(automation.id) + '</button>'
+      ).join('') || '<span class="tests-hint">No automations loaded</span>';
+      const running = testDraft.id && testsRunning.has(testDraft.id);
+      const initialRows = testDraft.initial.map((entry, iEntry) =>
+        '<div class="tests-row" data-collection="initial" data-index="' + iEntry + '"><span class="row-fields">' + entityInput(entry.entityId) + '<span class="tests-hint">=</span>' + stateInput(entry.state) +
+        jsonInput(entry.attributes, 'attributes', 'attributes') +
+        '<button class="row-btn" title="Use the current real state" onclick="fillCurrentState(this)">↺ now</button></span>' + rowActions('initial') + '</div>'
+      ).join('') || '<div class="tests-hint" style="padding: 2px 4px;">Every other entity starts with its current real state.</div>';
+
+      editor.innerHTML =
+        '<div class="tests-toolbar">' +
+          '<input class="tests-title" value="' + escapeAttr(testDraft.name) + '" oninput="testDraft.name = this.value; markTestDirty()" spellcheck="false">' +
+          '<span class="tests-dirty" id="testDirtyMarker">' + (testDraftDirty ? '● unsaved' : '') + '</span>' +
+          (running
+            ? '<button class="btn" onclick="stopCurrentTest()" title="Stop the run">■ Stop</button>'
+            : '<button class="btn btn-accent" onclick="runCurrentTest()">▶ Run</button>') +
+          '<button class="btn' + (testDraftDirty ? ' btn-accent' : '') + '" id="testSaveBtn" onclick="saveCurrentTest()">Save</button>' +
+          '<button class="btn" onclick="duplicateTest()">Duplicate</button>' +
+          '<button class="btn" onclick="deleteTest()">Delete</button>' +
+        '</div>' +
+        '<div class="tests-settings">' +
+          '<label>File <select class="tests-select" onchange="testDraft.file = this.value; markTestDirty()">' + fileOptions + '</select></label>' +
+          '<label title="Simulated time of day the test starts at (empty = now)">Start at <input class="tests-input" type="time" value="' + escapeAttr(testDraft.startTime) + '" oninput="testDraft.startTime = this.value; markTestDirty()"></label>' +
+          '<label title="light.turn_on makes the light \'on\' in the simulation, and so on"><input type="checkbox"' + (testDraft.applyEffects ? ' checked' : '') + ' onchange="testDraft.applyEffects = this.checked; markTestDirty()"> Service calls change states</label>' +
+          '<label' + (testDraft.liveCalls ? ' class="live-on"' : '') + ' title="Service calls also go to Home Assistant, so real devices react. Run from here only: the AI and ▶ This file run it simulated">' +
+            '<input type="checkbox"' + (testDraft.liveCalls ? ' checked' : '') + ' onchange="setTestLiveCalls(this.checked)"> Send calls to Home Assistant</label>' +
+          (testDraft.liveCalls
+            ? '<label title="Waits take as long as they say, so you can watch the devices. Off: waits finish instantly"><input type="checkbox"' + (testDraft.realTimeWaits ? ' checked' : '') + ' onchange="testDraft.realTimeWaits = this.checked; markTestDirty(); renderTestEditor()"> Waits take real time</label>'
+            : '') +
+        '</div>' +
+        '<div class="tests-section">Automations <span style="text-transform:none; letter-spacing:0;">' + (testDraft.automations.length ? '(' + testDraft.automations.length + ' selected)' : '(all)') + '</span>' +
+          '<button class="btn" onclick="setTestAutomations(\'file\')">Only this file\'s</button><button class="btn" onclick="setTestAutomations(\'all\')">All</button></div>' +
+        '<div class="tests-chips">' + chips + '</div>' +
+        '<div class="tests-section">Before start <button class="btn" onclick="addTestRow(\'initial\')">+ Entity</button></div>' + initialRows +
+        '<div class="tests-section">Steps <button class="btn" onclick="addTestRow(\'steps\')">+ Step</button></div>' +
+        testDraft.steps.map(renderStepRow).join('');
+    }
+
+    function renderTestResult() {
+      const pane = document.getElementById('testsResult');
+      if (!pane) return;
+      const result = testShownResult;
+      if (!result) {
+        pane.innerHTML = '<div class="tests-empty">' + (testDraft ? 'Run the test to see what the automations did, step by step.' : '') + '</div>';
+        return;
+      }
+      const passedCount = result.expectations.filter(expectation => expectation.passed).length;
+      const icons = { step: '▶', service: '⚡', effect: '↻', log: '✎', error: '✖', network: '⛔', info: 'ℹ' };
+      const items = result.items.map(item => {
+        const classes = ['timeline-item', 'k-' + item.kind];
+        if (item.level) classes.push('l-' + item.level);
+        if (item.kind === 'expect') classes.push(item.passed ? 'passed' : 'failed');
+        const icon = item.kind === 'expect' ? (item.passed ? '✓' : '✗') : (icons[item.kind] || '·');
+        const detail = item.kind === 'service' && item.detail && Object.keys(item.detail).filter(key => key !== 'entity_id').length
+          ? ' <span class="t-detail">' + escapeHtml(JSON.stringify(Object.fromEntries(Object.entries(item.detail).filter(([key]) => key !== 'entity_id')))) + '</span>'
+          : '';
+        return '<div class="' + classes.join(' ') + '"' + (item.step !== undefined ? ' data-step="' + item.step + '" onclick="highlightTestStep(' + item.step + ')"' : '') + '>' +
+          '<span class="t-time">+' + formatOffset(item.at) + '</span><span class="t-icon">' + icon + '</span>' +
+          '<span class="t-text">' + escapeHtml(item.text) + detail + (item.live ? ' <span class="tests-live-tag" title="Sent to Home Assistant">HA</span>' : '') + '</span>' +
+          (item.automationId ? '<span class="t-who" title="' + escapeAttr(item.automationId) + '">' + escapeHtml(item.automationId) + '</span>' : '') +
+        '</div>';
+      }).join('');
+      pane.innerHTML =
+        '<div class="tests-result-header">' +
+          '<div class="tests-verdict ' + (result.passed ? 'passed' : 'failed') + '">' + (result.passed ? '✓ Passed' : '✗ Failed') +
+            (result.expectations.length ? ' — ' + passedCount + '/' + result.expectations.length + ' checks' : ' — no checks') + '</div>' +
+          '<div class="tests-meta">' + escapeHtml(formatSeconds(Math.round(result.simulatedMs / 1000))) + ' simulated in ' + result.realMs + ' ms · ' +
+            result.serviceCalls + ' service call' + (result.serviceCalls === 1 ? '' : 's') + (result.liveCalls !== undefined ? ' (' + result.liveCalls + ' sent to Home Assistant)' : '') + ' · ' + escapeHtml(new Date(result.ranAt).toLocaleString()) + '</div>' +
+          (result.error ? '<div class="tests-error">' + escapeHtml(result.error) + '</div>' : '') +
+        '</div>' + items;
+    }
+
+    function highlightTestStep(iStep) {
+      document.querySelectorAll('.tests-row.highlight').forEach(row => row.classList.remove('highlight'));
+      const row = document.getElementById('testStep' + iStep);
+      if (row) {
+        row.classList.add('highlight');
+        row.scrollIntoView({ block: 'nearest' });
+      }
+    }
+
+    function testDraftProblems() {
+      if (!testDraft.name.trim()) return 'Give the test a name';
+      if (document.querySelector('#testsEditor .tests-input.invalid')) return 'Fix the highlighted JSON fields (attributes/data must be a JSON object)';
+      for (const entry of testDraft.initial) {
+        if (!entry.entityId || !entry.state) return 'Every "Before start" row needs an entity and a state';
+      }
+      for (let iStep = 0; iStep < testDraft.steps.length; iStep++) {
+        const step = testDraft.steps[iStep];
+        if ((step.type === 'set' || step.type === 'expect_state') && (!step.entityId || !step.state)) return 'Step ' + (iStep + 1) + ' needs an entity and a state';
+        if (step.type === 'event' && !step.eventType) return 'Step ' + (iStep + 1) + ' needs an event type';
+        if (step.type === 'expect_service' && !step.service) return 'Step ' + (iStep + 1) + ' needs a service, e.g. light.turn_on';
+      }
+      return null;
+    }
+
+    function cleanTestDraft() {
+      const scenario = JSON.parse(JSON.stringify(testDraft));
+      delete scenario.updatedAt;
+      for (const step of scenario.steps) {
+        if (step.type === 'expect_service' && !step.entityId) delete step.entityId;
+        if (step.type === 'expect_service' && !step.not) delete step.not;
+      }
+      return scenario;
+    }
+
+    function saveCurrentTest(thenRun) {
+      if (!testDraft) return;
+      const problem = testDraftProblems();
+      if (problem) {
+        testShownResult = null;
+        document.getElementById('testsResult').innerHTML = '<div class="tests-empty" style="color: var(--red);">' + escapeHtml(problem) + '</div>';
+        return;
+      }
+      testSaveRequestId++;
+      testPendingRunAfterSave = thenRun ? testSaveRequestId : null;
+      send({ type: 'test_save', scenario: cleanTestDraft(), requestId: testSaveRequestId });
+    }
+
+    function runCurrentTest() {
+      if (!testDraft) return;
+      if (testDraftDirty || !testDraft.id) saveCurrentTest(true);
+      else runTest(testDraft.id);
+    }
+
+    function runTest(id) {
+      if (!id || testsRunning.has(id)) return;
+      send({ type: 'test_run', id });
+    }
+
+    function stopCurrentTest() {
+      if (testDraft && testDraft.id) send({ type: 'test_stop', id: testDraft.id });
+    }
+
+    function setTestLiveCalls(enabled) {
+      testDraft.liveCalls = enabled;
+      if (!enabled) testDraft.realTimeWaits = false;
+      markTestDirty();
+      renderTestEditor();
+    }
+
+    function runTestsForFile() {
+      const file = activeTab || '';
+      const entries = testEntries.filter(entry => entry.scenario.file === file);
+      const simulated = entries.filter(entry => !entry.scenario.liveCalls);
+      const liveCount = entries.length - simulated.length;
+      if (liveCount) addLocalLog('info', 'tests', 'Skipped ' + liveCount + ' test' + (liveCount === 1 ? '' : 's') + ' that send calls to Home Assistant (run those on their own)');
+      if (simulated.length === 0) {
+        if (!liveCount) addLocalLog('info', 'tests', file ? 'No tests for ' + file + ' yet' : 'Open a file to run its tests');
+        return;
+      }
+      for (const entry of simulated) runTest(entry.scenario.id);
+    }
+
+    function handleTestSaved(msg) {
+      if (msg.requestId !== testSaveRequestId) return;
+      testDraft = JSON.parse(JSON.stringify(msg.scenario));
+      testDraftDirty = false;
+      renderTestEditor();
+      if (testPendingRunAfterSave === msg.requestId) {
+        testPendingRunAfterSave = null;
+        runTest(testDraft.id);
+      }
+    }
+
+    function handleTestError(msg) {
+      addLocalLog('error', 'tests', msg.message);
+      if (msg.requestId === undefined || msg.requestId === testSaveRequestId) {
+        document.getElementById('testsResult').innerHTML = '<div class="tests-empty" style="color: var(--red);">' + escapeHtml(msg.message) + '</div>';
+      }
+    }
+
+    function handleTestStarted(msg) {
+      testsRunning.add(msg.scenarioId);
+      renderTestsList();
+      if (testDraft && testDraft.id === msg.scenarioId) renderTestEditor();
+    }
+
+    function handleTestResult(msg) {
+      testsRunning.delete(msg.scenarioId);
+      const entry = testEntries.find(item => item.scenario.id === msg.scenarioId);
+      if (entry) entry.lastResult = msg.result;
+      if (testDraft && testDraft.id === msg.scenarioId) {
+        testShownResult = msg.result;
+        renderTestEditor();
+        renderTestResult();
+      }
+      renderTestsList();
+      updateTestsBadge();
+    }
+
+    // ─── Timeline ───────────────────────────────────
+    const TIMELINE_MAX_TRACES = 50;
+    const TIMELINE_MAX_SHOWN = 200;
+    const TIMELINE_PANEL_MIN_HEIGHT = 340;
+    const timelines = new Map(); // automationId -> { traces, ignoredCount, lastIgnoredAt }
+    let timelineSelected = null; // null = all automations
+    const timelineExpanded = new Set();
+    let timelineRenderPending = false;
+
+    function traceKey(trace) {
+      return trace.automationId + ':' + trace.id + ':' + trace.startedAt;
+    }
+
+    function handleTraces(list) {
+      timelines.clear();
+      for (const timeline of list || []) {
+        timelines.set(timeline.automationId, { traces: timeline.traces || [], ignoredCount: timeline.ignoredCount || 0, lastIgnoredAt: timeline.lastIgnoredAt });
+      }
+      scheduleTimelineRender();
+    }
+
+    function handleTraceUpdate(msg) {
+      let timeline = timelines.get(msg.automationId);
+      if (!timeline) {
+        timeline = { traces: [], ignoredCount: 0 };
+        timelines.set(msg.automationId, timeline);
+      }
+      timeline.ignoredCount = msg.ignoredCount || 0;
+      timeline.lastIgnoredAt = msg.lastIgnoredAt;
+      if (msg.trace) {
+        const key = traceKey(msg.trace);
+        const index = timeline.traces.findIndex(trace => traceKey(trace) === key);
+        if (index >= 0) timeline.traces[index] = msg.trace;
+        else {
+          timeline.traces.push(msg.trace);
+          if (timeline.traces.length > TIMELINE_MAX_TRACES) timeline.traces.shift();
+        }
+      }
+      scheduleTimelineRender();
+    }
+
+    function scheduleTimelineRender() {
+      if (activePanel !== 'timeline' || timelineRenderPending) return;
+      timelineRenderPending = true;
+      requestAnimationFrame(() => {
+        timelineRenderPending = false;
+        renderTimeline();
+      });
+    }
+
+    function openTimelineFor(automationId) {
+      timelineSelected = automationId;
+      switchPanel('timeline');
+    }
+
+    function selectTimelineAutomation(automationId) {
+      timelineSelected = automationId || null;
+      renderTimeline();
+    }
+
+    function describeTrigger(trigger) {
+      switch (trigger.kind) {
+        case 'start': return 'onStart';
+        case 'state': return trigger.entityId + ': ' + (trigger.from == null ? '—' : trigger.from) + ' → ' + (trigger.to == null ? '—' : trigger.to);
+        case 'event': return 'event ' + trigger.eventType;
+        case 'timer': {
+          const delay = trigger.delayMs || 0;
+          const delayText = delay < 1000 ? delay + ' ms' : formatSeconds(Math.round(delay / 1000));
+          return '⏲ ' + (trigger.interval ? 'every ' + delayText : delayText + ' after') + ' · ' + trigger.parent;
+        }
+        default: return trigger.kind;
+      }
+    }
+
+    function renderTimeline() {
+      const list = document.getElementById('timelineAutomations');
+      const runs = document.getElementById('timelineRuns');
+      if (!list || !runs) return;
+      const ids = Array.from(new Set([...automations.map(automation => automation.id), ...timelines.keys()]));
+      const total = ids.reduce((sum, id) => sum + ((timelines.get(id) || {}).traces || []).length, 0);
+      list.innerHTML =
+        '<div class="timeline-auto' + (timelineSelected === null ? ' selected' : '') + '" onclick="selectTimelineAutomation(null)"><span class="ta-name">All automations</span><span class="ta-count">' + total + '</span></div>' +
+        ids.map(id => {
+          const timeline = timelines.get(id) || { traces: [] };
+          const errors = timeline.traces.filter(trace => trace.error || trace.actions.some(action => action.kind === 'error' || action.error)).length; //< runs with an error
+          return '<div class="timeline-auto' + (timelineSelected === id ? ' selected' : '') + '" data-id="' + escapeAttr(id) + '" onclick="selectTimelineAutomation(this.dataset.id)">' +
+            '<span class="ta-name">' + escapeHtml(id) + '</span>' + (errors ? '<span class="ta-errors">✖' + errors + '</span>' : '') +
+            '<span class="ta-count">' + timeline.traces.length + '</span></div>';
+        }).join('');
+
+      const selectedIds = timelineSelected === null ? ids : [timelineSelected];
+      const traces = selectedIds.flatMap(id => ((timelines.get(id) || {}).traces || []))
+        .sort((left, right) => right.startedAt - left.startedAt)
+        .slice(0, TIMELINE_MAX_SHOWN);
+      const ignored = selectedIds.reduce((sum, id) => sum + ((timelines.get(id) || {}).ignoredCount || 0), 0);
+      const header = '<div class="timeline-runs-header">' + (timelineSelected === null ? 'Every automation' : escapeHtml(timelineSelected)) +
+        ' · newest first · runs that did nothing are only counted</div>';
+      if (traces.length === 0) {
+        runs.innerHTML = header + '<div class="tests-empty">Nothing recorded yet. Every time an automation reacts (state change, event, timer, start), its service calls, logs and errors show up here.' +
+          (ignored ? '<br><br>' + ignored + ' trigger(s) did nothing.' : '') + '</div>';
+        return;
+      }
+      runs.innerHTML = header + traces.map(trace => {
+        const key = traceKey(trace);
+        const expanded = timelineExpanded.has(key);
+        const calls = trace.actions.filter(action => action.kind === 'service').length;
+        const errorActions = trace.actions.filter(action => action.kind === 'error').length;
+        const errors = errorActions || trace.actions.filter(action => action.error).length || (trace.error ? 1 : 0);
+        const duration = trace.durationMs === undefined ? 'running' : trace.durationMs + ' ms';
+        const actions = expanded ? '<div class="run-actions">' + trace.actions.map(action => {
+          let text;
+          let classes = 'run-action ' + action.kind;
+          if (action.kind === 'service') {
+            const data = action.data && Object.keys(action.data).length ? ' ' + JSON.stringify(action.data) : '';
+            text = '⚡ ' + escapeHtml(action.domain + '.' + action.service + data) + (action.error ? ' <span class="failed">failed: ' + escapeHtml(action.error) + '</span>' : '');
+          } else if (action.kind === 'log') {
+            classes += ' ' + action.level;
+            text = '✎ ' + escapeHtml(action.message);
+          } else {
+            text = '✖ ' + escapeHtml(action.message);
+          }
+          return '<div class="' + classes + '"><span class="ra-at">+' + action.at + ' ms</span><span class="ra-text">' + text + '</span></div>';
+        }).join('') + (trace.truncated ? '<div class="run-action"><span class="ra-at"></span><span class="ra-text">… more actions were not recorded</span></div>' : '') + '</div>' : '';
+        return '<div class="run-row"><div class="run-summary" data-key="' + escapeAttr(key) + '" onclick="toggleTimelineRun(this.dataset.key)">' +
+          '<span class="r-caret">' + (expanded ? '▾' : '▸') + '</span>' +
+          '<span class="r-time">' + formatClock(trace.startedAt) + '</span>' +
+          (timelineSelected === null ? '<span class="r-auto">' + escapeHtml(trace.automationId) + '</span>' : '') +
+          '<span class="r-trigger" title="' + escapeAttr(describeTrigger(trace.trigger)) + '">' + escapeHtml(describeTrigger(trace.trigger)) + '</span>' +
+          (calls ? '<span class="run-chip calls">' + calls + ' call' + (calls === 1 ? '' : 's') + '</span>' : '') +
+          (errors ? '<span class="run-chip error">' + errors + ' error' + (errors === 1 ? '' : 's') + '</span>' : '') +
+          '<span class="run-chip">' + duration + '</span>' +
+        '</div>' + actions + '</div>';
+      }).join('') + (ignored ? '<div class="timeline-ignored">' + ignored + ' other trigger(s) did nothing (no service calls, logs or errors).</div>' : '');
+    }
+
+    function toggleTimelineRun(key) {
+      if (timelineExpanded.has(key)) timelineExpanded.delete(key);
+      else timelineExpanded.add(key);
+      renderTimeline();
+    }
+
+    // ─── File history ───────────────────────────────
+    let historyMode = null; // { path } for one file, { path: null } for recent changes
+    let historyVersions = [];
+    let historySelected = null; // { version, previous }
+    let historyCompare = 'current'; // 'current' | 'previous'
+    let historyDiffEditor = null;
+    let historyModels = [];
+
+    function openFileHistory(path) {
+      const target = path === undefined ? activeTab : path;
+      historyMode = { path: target || null };
+      historyCompare = target ? 'current' : 'previous';
+      historySelected = null;
+      document.getElementById('historyTitle').textContent = target ? 'History — ' + target : 'Recent changes';
+      document.getElementById('historyList').innerHTML = '<div class="history-empty">Loading…</div>';
+      document.getElementById('historyDiffToolbar').innerHTML = '';
+      document.getElementById('historyDialog').classList.add('active');
+      send(target ? { type: 'history_list', path: target } : { type: 'history_list' });
+    }
+
+    function closeHistoryDialog() {
+      document.getElementById('historyDialog').classList.remove('active');
+      for (const model of historyModels) model.setValue('');
+    }
+
+    const HISTORY_VIEW_LANGUAGE = 'tae-history-ts';
+    let historyViewLanguage = null;
+
+    /** TypeScript colors without the TypeScript worker (it errors on short-lived read-only models). */
+    function historyLanguage(path) {
+      if (path.endsWith('.json')) return Promise.resolve('json');
+      if (!historyViewLanguage) {
+        historyViewLanguage = (async () => {
+          try {
+            const typescript = monaco.languages.getLanguages().find(language => language.id === 'typescript');
+            const definition = await typescript.loader();
+            monaco.languages.register({ id: HISTORY_VIEW_LANGUAGE });
+            monaco.languages.setMonarchTokensProvider(HISTORY_VIEW_LANGUAGE, definition.language);
+            monaco.languages.setLanguageConfiguration(HISTORY_VIEW_LANGUAGE, definition.conf);
+            return HISTORY_VIEW_LANGUAGE;
+          } catch {
+            return 'plaintext';
+          }
+        })();
+      }
+      return historyViewLanguage;
+    }
+
+    /** Two models reused for every diff. */
+    function historyModelsFor(language) {
+      if (historyModels.length && historyModels[0].getLanguageId() === language) return historyModels;
+      if (historyDiffEditor) historyDiffEditor.setModel(null);
+      for (const model of historyModels) model.dispose();
+      historyModels = [monaco.editor.createModel('', language), monaco.editor.createModel('', language)];
+      return historyModels;
+    }
+
+    function handleFileHistory(msg) {
+      if (!historyMode || (msg.path || null) !== historyMode.path) return;
+      historyVersions = msg.versions || [];
+      renderHistoryList();
+      if (historyVersions.length) {
+        selectHistoryVersion(historyMode.path && historyVersions.length > 1 && historyVersions[0].source !== 'original' ? historyVersions[1].id : historyVersions[0].id);
+      } else {
+        document.getElementById('historyDiffToolbar').innerHTML = '';
+        for (const model of historyModels) model.setValue('');
+      }
+    }
+
+    function sourceLabel(version) {
+      if (version.deleted) return 'deleted';
+      return { 'ai-chat': 'AI chat', mcp: 'MCP', editor: 'editor', original: 'before history', external: 'outside TAE', import: 'import', restore: 'restore' }[version.source] || version.source;
+    }
+
+    function renderHistoryList() {
+      const list = document.getElementById('historyList');
+      if (historyVersions.length === 0) {
+        list.innerHTML = '<div class="history-empty">No versions yet. Every save, AI edit, import and delete is kept here.</div>';
+        return;
+      }
+      list.innerHTML = historyVersions.map((version, iVersion) => {
+        const selected = historySelected && historySelected.version.id === version.id ? ' selected' : '';
+        const tagClass = version.deleted ? 'deleted' : version.source;
+        const label = historyMode.path ? (iVersion === 0 ? 'Latest' : 'Version ' + version.id) : version.path;
+        return '<div class="history-item' + selected + '" data-id="' + version.id + '" onclick="selectHistoryVersion(Number(this.dataset.id))">' +
+          '<div class="h-path" title="' + escapeAttr(version.path) + '">' + escapeHtml(label) + '</div>' +
+          '<div class="h-meta"><span>' + escapeHtml(new Date(version.createdAt).toLocaleString()) + '</span>' +
+          '<span class="source-tag ' + escapeAttr(tagClass) + '">' + escapeHtml(sourceLabel(version)) + '</span>' +
+          (version.deleted ? '' : '<span>' + version.lines + ' lines</span>') + '</div></div>';
+      }).join('');
+    }
+
+    function selectHistoryVersion(id) {
+      historySelected = null;
+      renderHistoryList();
+      send({ type: 'history_get', id });
+    }
+
+    async function currentFileContent(path) {
+      const tab = openTabs.get(path);
+      if (tab && tab.model) return tab.model.getValue();
+      try {
+        const response = await fetch(getBasePath() + '/api/files/' + path.split('/').map(encodeURIComponent).join('/'));
+        if (!response.ok) return '';
+        const data = await response.json();
+        return data.content || '';
+      } catch {
+        return '';
+      }
+    }
+
+    async function handleFileVersion(msg) {
+      if (!historyMode) return;
+      historySelected = { version: msg.version, previous: msg.previous };
+      renderHistoryList();
+      await renderHistoryDiff();
+    }
+
+    function setHistoryCompare(mode) {
+      historyCompare = mode;
+      renderHistoryDiff();
+    }
+
+    async function renderHistoryDiff() {
+      if (!historySelected || !monacoReady) return;
+      const { version, previous } = historySelected;
+      const toolbar = document.getElementById('historyDiffToolbar');
+      const compare = historyMode.path ? historyCompare : 'previous';
+      let left = '';
+      let right = '';
+      let description = '';
+      if (version.deleted) {
+        left = previous ? previous.content || '' : '';
+        right = '';
+        description = 'The file was deleted here. Left: its last content.';
+      } else if (compare === 'current') {
+        left = version.content || '';
+        right = await currentFileContent(version.path);
+        description = 'Left: this version · Right: the file now' + (openTabs.has(version.path) && openTabs.get(version.path).modified ? ' (with unsaved edits)' : '');
+      } else {
+        left = previous ? previous.content || '' : '';
+        right = version.content || '';
+        description = previous ? 'What this change did (left: before, right: after)' : 'First version (nothing before it)';
+      }
+      const restoreId = version.deleted ? (previous ? previous.id : null) : version.id;
+      const restoreLabel = version.deleted ? 'Restore the deleted file' : 'Restore this version';
+      toolbar.innerHTML = '<span>' + escapeHtml(description) + '</span><span class="spacer"></span>' +
+        (historyMode.path && !version.deleted ? '<button class="btn' + (compare === 'current' ? ' btn-accent' : '') + '" onclick="setHistoryCompare(\'current\')">vs now</button>' +
+          '<button class="btn' + (compare === 'previous' ? ' btn-accent' : '') + '" onclick="setHistoryCompare(\'previous\')">what changed</button>' : '') +
+        (restoreId ? '<button class="btn btn-accent" onclick="restoreHistoryVersion(' + restoreId + ')">' + restoreLabel + '</button>' : '');
+
+      const language = await historyLanguage(version.path);
+      const [original, modified] = historyModelsFor(language);
+      original.setValue(left);
+      modified.setValue(right);
+      if (!historyDiffEditor) {
+        historyDiffEditor = monaco.editor.createDiffEditor(document.getElementById('historyDiff'), {
+          theme: 'vs-dark',
+          readOnly: true,
+          originalEditable: false,
+          automaticLayout: true,
+          renderSideBySide: !isTabletSize(),
+          useInlineViewWhenSpaceIsLimited: false,
+          minimap: { enabled: false },
+          fontSize: 12,
+          scrollBeyondLastLine: false,
+        });
+      }
+      const current = historyDiffEditor.getModel();
+      if (!current || current.original !== original) historyDiffEditor.setModel({ original, modified });
+    }
+
+    function restoreHistoryVersion(id) {
+      const tab = historySelected && openTabs.get(historySelected.version.path);
+      if (tab && tab.modified && !confirm('The open tab has unsaved edits. Restoring replaces the file on disk; your unsaved edits stay in the editor. Continue?')) return;
+      send({ type: 'history_restore', id });
+    }
+
+    function handleHistoryRestored(msg) {
+      addLocalLog('info', 'ui', 'Restored ' + msg.path + ' (version ' + msg.id + '). Reload to apply.');
+      if (historyMode) send(historyMode.path ? { type: 'history_list', path: historyMode.path } : { type: 'history_list' });
+    }
+
+    // ─── Chat: @mentions and cost ───────────────────
+    const MENTION_PATTERN = /@([A-Za-z0-9_./-]+)/g;
+    const MENTION_MAX_ITEMS = 12;
+    let aiMentionItems = [];
+    let aiMentionSelected = 0;
+    let aiChatCostUsd = 0;
+
+    function mentionTarget(name) {
+      const cleaned = name.replace(/[.,;:!?)]+$/, '');
+      if (entityIndex.byId.has(cleaned)) return { kind: 'entity', name: cleaned };
+      if (allWorkspaceFiles().includes(cleaned)) return { kind: 'file', name: cleaned };
+      return null;
+    }
+
+    function extractMentions(text) {
+      const names = [];
+      for (const match of text.matchAll(MENTION_PATTERN)) {
+        const target = mentionTarget(match[1]);
+        if (target && !names.includes(target.name)) names.push(target.name);
+      }
+      return names;
+    }
+
+    function highlightMentions(html) {
+      return html.replace(MENTION_PATTERN, (whole, name) => {
+        const target = mentionTarget(name);
+        if (!target) return whole;
+        return '<span class="ai-mention" title="' + (target.kind === 'file' ? 'File' : 'Entity') + ' sent with this message">@' + target.name + '</span>' + name.slice(target.name.length);
+      });
+    }
+
+    function updateAiMentionPopup() {
+      const input = document.getElementById('aiInput');
+      const popup = document.getElementById('aiMentionPopup');
+      const before = input.value.slice(0, input.selectionStart);
+      const match = /(^|\s)@([A-Za-z0-9_./-]*)$/.exec(before);
+      if (!match) {
+        hideAiMentionPopup();
+        return;
+      }
+      const query = match[2].toLowerCase();
+      const files = allWorkspaceFiles().filter(file => file.toLowerCase().includes(query)).map(file => ({ kind: 'file', value: file, label: '' }));
+      const entities = entityIndex.list.filter(entity => entity.entityId.includes(query) || (entity.name || '').toLowerCase().includes(query))
+        .map(entity => ({ kind: 'entity', value: entity.entityId, label: entity.name || '' }));
+      aiMentionItems = [...files, ...entities].slice(0, MENTION_MAX_ITEMS);
+      aiMentionSelected = 0;
+      if (aiMentionItems.length === 0) {
+        hideAiMentionPopup();
+        return;
+      }
+      renderAiMentionPopup();
+      popup.classList.add('active');
+    }
+
+    function renderAiMentionPopup() {
+      document.getElementById('aiMentionPopup').innerHTML = aiMentionItems.map((item, iItem) =>
+        '<div class="ai-mention-item' + (iItem === aiMentionSelected ? ' selected' : '') + '" onmousedown="event.preventDefault(); acceptAiMention(' + iItem + ')">' +
+          '<span class="m-kind">' + (item.kind === 'file' ? 'file' : 'entity') + '</span><span>' + escapeHtml(item.value) + '</span>' +
+          (item.label ? '<span class="m-name">' + escapeHtml(item.label) + '</span>' : '') + '</div>'
+      ).join('');
+    }
+
+    function hideAiMentionPopup() {
+      aiMentionItems = [];
+      const popup = document.getElementById('aiMentionPopup');
+      if (popup) popup.classList.remove('active');
+    }
+
+    function acceptAiMention(iItem) {
+      const item = aiMentionItems[iItem];
+      if (!item) return;
+      const input = document.getElementById('aiInput');
+      const before = input.value.slice(0, input.selectionStart);
+      const after = input.value.slice(input.selectionStart);
+      const replaced = before.replace(/@([A-Za-z0-9_./-]*)$/, '@' + item.value + ' ');
+      input.value = replaced + after;
+      input.selectionStart = input.selectionEnd = replaced.length;
+      hideAiMentionPopup();
+      input.focus();
+      autoResizeAiInput();
+    }
+
+    /** Keys for the mention popup; returns true when the key was used. */
+    function handleAiMentionKey(event) {
+      if (!aiMentionItems.length) return false;
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        const step = event.key === 'ArrowDown' ? 1 : aiMentionItems.length - 1;
+        aiMentionSelected = (aiMentionSelected + step) % aiMentionItems.length;
+        renderAiMentionPopup();
+        return true;
+      }
+      if (event.key === 'Enter' || event.key === 'Tab') {
+        event.preventDefault();
+        acceptAiMention(aiMentionSelected);
+        return true;
+      }
+      if (event.key === 'Escape') {
+        hideAiMentionPopup();
+        return true;
+      }
+      return false;
+    }
+
+    function formatCost(usd) {
+      if (usd < 0.01) return '$' + usd.toFixed(4);
+      if (usd < 1) return '$' + usd.toFixed(3);
+      return '$' + usd.toFixed(2);
     }
   </script>
 </body>

@@ -1,20 +1,21 @@
 name: "TypeScript Automation Engine"
 description: "Write and run Home Assistant automations in TypeScript with a managed runtime"
-version: "1.7.0"
+version: "1.9.1"
 slug: "typescript_automation_engine"
-url: "https://github.com/youruser/ha-addon-tae"
+url: "https://github.com/Cycov/typescript-automation-engine"
 arch:
   - aarch64
   - amd64
-  - armhf
-  - armv7
-  - i386
 homeassistant_api: true
 hassio_api: true
 ingress: true
 ingress_port: 3200
 panel_icon: "mdi:language-typescript"
 panel_title: "TAE"
+ports:
+  3201/tcp: 3201
+ports_description:
+  3201/tcp: "MCP server for AI tools such as Claude Code (token protected; clear to disable)"
 options:
   log_level: "info"
   sync_path: "/share/tae"
@@ -26,9 +27,10 @@ schema:
   log_level: list(debug|info|warn|error)
   sync_path: str
   ai_provider: list(none|github|openai|anthropic|deepseek)
-  ai_api_key: str
+  ai_api_key: password
   ai_model: str
   ai_completion_model: str
+  mcp_token: password?
 startup: application
 init: false
 map:

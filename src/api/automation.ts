@@ -131,8 +131,9 @@ export abstract class Automation {
   async onStop(): Promise<void> {}
 
   /**
-   * Called when the engine performs a reload.
-   * The automation stays registered but the engine re-evaluates its state.
+   * Called when the engine reloads automations (Reload button, or after code changes),
+   * before `onStop()` and `onUnload()`. The reload then creates fresh instances from
+   * the updated code, so use this to save state you want the new instance to pick up.
    */
   async onReload(): Promise<void> {}
 
@@ -260,11 +261,12 @@ export abstract class Automation {
   }
 
   /**
-   * Get an entity's current state from the in-memory cache.
-   * This is fast (no network call) but may be slightly stale.
+   * Get an entity's current state from TAE's local copy of all states.
+   * No network call; the copy is updated before state-change callbacks run.
+   * Resolves immediately — the standalone `getEntityState()` is the synchronous variant.
    *
    * @param entityId - The entity ID to look up (e.g., `"sensor.temperature"`).
-   * @returns The cached entity state, or undefined if not found.
+   * @returns The entity state, or undefined if not found.
    *
    * @example
    * const state = await this.getEntityState('sensor.outdoor_temperature');

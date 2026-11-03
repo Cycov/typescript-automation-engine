@@ -7,6 +7,9 @@
 
 import * as fs from "fs";
 import * as path from "path";
+import { ChangeSource, FileHistory } from "./file-history";
+
+const VERSIONED_EXTENSIONS = [".ts", ".json", ".snippets"];
 
 export interface FileEntry {
   name: string;
@@ -18,10 +21,12 @@ export interface FileEntry {
 export class FileManager {
   private automationsPath: string;
   private syncPath: string;
+  private history: FileHistory | null;
 
-  constructor(automationsPath: string, syncPath: string) {
+  constructor(automationsPath: string, syncPath: string, history: FileHistory | null = null) {
     this.automationsPath = automationsPath;
     this.syncPath = syncPath;
+    this.history = history;
   }
 
   /**
@@ -99,39 +104,46 @@ export class FileManager {
   /**
    * Write a file in the automations directory.
    */
-  writeFile(relativePath: string, content: string): void {
+  writeFile(relativePath: string, content: string, source: ChangeSource = "editor"): void {
     const safePath = this.resolveSafe(relativePath);
     const dir = path.dirname(safePath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
+    const previous = this.readIfVersioned(safePath);
     fs.writeFileSync(safePath, content, "utf-8");
+    this.recordVersion(safePath, content, source, previous);
   }
 
   /**
    * Create a new file.
    */
-  createFile(relativePath: string, content: string = ""): void {
+  createFile(relativePath: string, content: string = "", source: ChangeSource = "editor"): void {
     const safePath = this.resolveSafe(relativePath);
     if (fs.existsSync(safePath)) {
       throw new Error(`File already exists: ${relativePath}`);
     }
-    this.writeFile(relativePath, content);
+    this.writeFile(relativePath, content, source);
   }
 
   /**
-   * Delete a file or directory.
+   * Delete a file or directory. The last content stays in the file history.
    */
-  deleteFile(relativePath: string): void {
+  deleteFile(relativePath: string, source: ChangeSource = "editor"): void {
     const safePath = this.resolveSafe(relativePath);
     if (!fs.existsSync(safePath)) {
       throw new Error(`File not found: ${relativePath}`);
     }
     const stat = fs.statSync(safePath);
     if (stat.isDirectory()) {
+      for (const filePath of this.walkFiles(safePath)) {
+        this.recordVersion(filePath, null, source, this.readIfVersioned(filePath));
+      }
       fs.rmSync(safePath, { recursive: true, force: true });
     } else {
+      const previous = this.readIfVersioned(safePath);
       fs.unlinkSync(safePath);
+      this.recordVersion(safePath, null, source, previous);
     }
   }
 
@@ -154,6 +166,7 @@ export class FileManager {
       fs.mkdirSync(dir, { recursive: true });
     }
     fs.renameSync(oldSafe, newSafe);
+    this.history?.rename(this.toRelative(oldSafe), this.toRelative(newSafe));
   }
 
   /**
@@ -268,7 +281,9 @@ export class FileManager {
           if (!fs.existsSync(destPath)) fs.mkdirSync(destPath, { recursive: true });
           copyRecursive(srcPath, destPath);
         } else if (item.name.endsWith(".ts") || item.name.endsWith(".json")) {
+          const previous = this.readIfVersioned(destPath);
           fs.copyFileSync(srcPath, destPath);
+          this.recordVersion(destPath, this.readIfVersioned(destPath), "import", previous);
           imported++;
         }
       }
@@ -278,12 +293,76 @@ export class FileManager {
     return { imported };
   }
 
+  /** True if the path exists inside the automations directory. */
+  exists(relativePath: string): boolean {
+    return fs.existsSync(this.resolveSafe(relativePath));
+  }
+
+  /** Every listed file as a flat list of relative paths. */
+  listFilePaths(): string[] {
+    const out: string[] = [];
+    const walk = (entries: FileEntry[]) => {
+      for (const entry of entries) {
+        if (entry.isDirectory) walk(entry.children || []);
+        else out.push(entry.path);
+      }
+    };
+    walk(this.listFiles());
+    return out;
+  }
+
+  getAutomationsPath(): string {
+    return this.automationsPath;
+  }
+
+  // ─── File history ───────────────────────────────────────────
+
+  private toRelative(absPath: string): string {
+    return path.relative(path.resolve(this.automationsPath), absPath).split(path.sep).join("/");
+  }
+
+  private isVersioned(absPath: string): boolean {
+    const relative = this.toRelative(absPath);
+    if (relative.split("/").some((segment) => segment === "node_modules" || segment.startsWith("."))) return false;
+    return VERSIONED_EXTENSIONS.some((extension) => relative.endsWith(extension));
+  }
+
+  private readIfVersioned(absPath: string): string | null {
+    if (!this.history || !this.isVersioned(absPath)) return null;
+    try {
+      return fs.existsSync(absPath) && fs.statSync(absPath).isFile() ? fs.readFileSync(absPath, "utf-8") : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private recordVersion(absPath: string, content: string | null, source: ChangeSource, previous: string | null): void {
+    if (!this.history || !this.isVersioned(absPath)) return;
+    try {
+      this.history.record(this.toRelative(absPath), content, source, previous);
+    } catch {
+      // History is a convenience; a failure must not block the file operation
+    }
+  }
+
+  private walkFiles(absDir: string): string[] {
+    const files: string[] = [];
+    for (const item of fs.readdirSync(absDir, { withFileTypes: true })) {
+      const fullPath = path.join(absDir, item.name);
+      if (item.isDirectory()) files.push(...this.walkFiles(fullPath));
+      else files.push(fullPath);
+    }
+    return files;
+  }
+
   /**
    * Resolve a relative path to an absolute path, ensuring it stays within automations directory.
    */
   private resolveSafe(relativePath: string): string {
-    const resolved = path.resolve(this.automationsPath, relativePath);
-    if (!resolved.startsWith(this.automationsPath)) {
+    const root = path.resolve(this.automationsPath);
+    const resolved = path.resolve(root, relativePath);
+    const relative = path.relative(root, resolved);
+    if (relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative)) {
       throw new Error("Path traversal not allowed");
     }
     return resolved;

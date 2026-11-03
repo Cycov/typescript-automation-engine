@@ -1,8 +1,9 @@
-ARG BUILD_FROM=ghcr.io/hassio-addons/base:16.3.2
+ARG BUILD_FROM=ghcr.io/hassio-addons/base:21.0.10
 FROM ${BUILD_FROM}
 
-# Remove exact musl pin from world file (base image pins musl=1.2.5-r0 but repo now has r3),
-# then upgrade all base packages so musl can be updated, then install build deps
+# Unpin musl in the world file (the base image pins an exact version that the
+# repository may have moved past), upgrade base packages, then install Node and
+# the build tools better-sqlite3 needs when no prebuilt binary matches
 RUN sed -i 's/^musl=.*/musl/' /etc/apk/world \
     && apk upgrade --no-cache \
     && apk add --no-cache nodejs npm python3 make g++
@@ -10,9 +11,9 @@ RUN sed -i 's/^musl=.*/musl/' /etc/apk/world \
 # Set up working directory
 WORKDIR /app
 
-# Copy package files and install dependencies
-COPY package.json ./
-RUN npm install --production=false
+# Install dependencies exactly as locked
+COPY package.json package-lock.json ./
+RUN npm ci
 
 # Copy source
 COPY tsconfig.json ./
@@ -21,7 +22,7 @@ COPY src/ ./src/
 # Copy default automation templates
 COPY defaults/ ./defaults/
 
-# Copy SKILL.md for AI export
+# SKILL.md: AI system prompt, MCP API reference and download
 COPY SKILL.md ./
 
 # Build TypeScript (main process + api module)
@@ -43,6 +44,6 @@ LABEL \
     io.hass.name="TypeScript Automation Engine" \
     io.hass.description="Write and run Home Assistant automations in TypeScript" \
     io.hass.type="addon" \
-    io.hass.version="1.7.0"
+    io.hass.version="1.9.1"
 
 CMD ["/run.sh"]

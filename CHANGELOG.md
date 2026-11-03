@@ -1,5 +1,59 @@
 # Changelog
 
+## 1.9.1
+
+- **Feature**: tests can send their service calls to Home Assistant (**Send calls to Home Assistant**), so you can fake a trigger (sunset, motion) and watch the real devices react. **Waits take real time** makes waits last as long as they say. Such tests are tagged **HA**; the AI's `run_test` and **▶ This file** still run them simulated
+- **Feature**: **■ Stop** ends a running test
+- **Change**: entity, state and service fields in tests get a proper suggestion list (matches entity ids and friendly names, shows current states) instead of the browser's own
+- **Change**: the AI chat sidebar and the test result pane can be resized by dragging their left edge (double-click resets)
+
+## 1.9.0
+
+- **Feature**: **Tests** tab: scenarios that set entity states, wait and fire events, then check states and service calls. They run in an isolated copy of the automations with a simulated clock (waits are instant) and recorded service calls (no device reacts). Scenarios are saved per file and keep their last result; the AI can list, write and run them (`list_tests`, `get_test`, `save_test`, `run_test`)
+- **Feature**: **Timeline** tab: every run of every automation (state change, event, timer, onStart) with the service calls, logs and errors it caused and their timings; timers show what scheduled them. Also an AI tool (`get_automation_timeline`)
+- **Feature**: **File history**: every save, AI edit, import, restore and delete is versioned (also changes made outside TAE). Compare any version with the file now or with the version before it, and restore it, including deleted files (`🕘 History`, AI tools `file_history`, `restore_file_version`)
+- **Feature**: entity ids in the editor: autocomplete with friendly names, hover with state and attributes, and a warning with a quick fix for unknown ids (typos). `type_check` reports them too
+- **Feature**: AI chat: `@file` and `@entity` mentions attach the file or entity state to the message; estimated cost per reply and per chat for Claude models
+- **Change**: an error in a timer callback started by an automation now counts as that automation's error (⚠) instead of a worker error
+
+## 1.8.1
+
+- **Feature**: chat effort and inline completion effort in AI settings (Claude: `output_config.effort`; OpenAI-compatible: `reasoning_effort` where the model accepts it). A changed chat effort applies to new chats
+- **Fix**: the chat's "Context:" line now follows the open file, and shows unsaved edits and the selection
+
+## 1.8.0
+
+- **Feature**: AI chat with tools - entity/area/service lookup, file read/edit with approval and diff preview, type-check, reload, logs, service calls - for every provider
+- **Feature**: MCP server (port 3201, token protected) exposing the same tools to Claude Code and other MCP clients
+- **Feature**: Anthropic through the official SDK with current models (`claude-opus-5-5`, `claude-haiku-5-5` for completions) and prompt caching; DeepSeek added to the docs; GitHub Models moved to its current endpoint
+- **Feature**: AI settings saved in TAE persist across restarts; model list loaded from the provider
+- **Fix**: an error in a subscription callback (e.g. a failed `callService`) no longer stops the automation permanently; it is logged and shown as ⚠
+- **Fix**: standalone `getEntityState()` is synchronous as documented (it returned a Promise, so checks like `getEntityState(x)?.state === 'on'` were always false)
+- **Fix**: the worker thread is restarted automatically if it dies
+- **Fix**: `onReload()` is now called before a reload
+- **Fix**: event subscriptions are released in Home Assistant on stop/reload; TAE subscribes to `state_changed` only instead of every event
+- **Fix**: `fetchEntityState` fetches one entity instead of all states
+- **Fix**: the UI only accepts connections through ingress; automation names and errors are escaped in the sidebar
+- **Change**: Node.js 24 (base image 21.0.10); 32-bit platforms (armhf, armv7, i386) are no longer supported by the base image
+- **Docs**: SKILL.md corrected (only `index.ts`'s `onInit()` runs; `emitAll`; error behaviour)
+
+## 1.7.0
+
+- **Feature**: AI integration — inline code completions and chat sidebar (GitHub Models, OpenAI, Anthropic)
+- **Feature**: AI settings dialog for configuring provider, API key, and models from the UI
+- **Feature**: Code snippets — define reusable templates in `.snippets` files with tab-stop placeholders
+- **Feature**: Storage entries now open on single click (name or value)
+- **Feature**: Tab drag-and-drop reorder in the editor
+- **Feature**: `Ctrl+Shift+S` saves all open files
+- **Feature**: Help panel (`Ctrl+Shift+H`) with keyboard shortcuts reference
+- **Fix**: SKILL.md no longer auto-downloads on page load (only when the download button is clicked)
+- **Fix**: Event subscription duplication on reload
+- **Fix**: Session persistence for sidebar state and scroll positions
+- **Fix**: Horizontal sidebar resize handle
+- **UI**: Clear Logs button moved to output panel filter bar
+- **Docs**: Added AI Integration setup guide with GitHub Models PAT instructions
+- **Docs**: Added Code Snippets documentation
+
 ## 1.6.0
 
 - **Feature**: Storage viewer in the sidebar — see all persistent (SQLite) and temporary (in-memory) key/value pairs in real time, grouped by namespace, with collapsible sections

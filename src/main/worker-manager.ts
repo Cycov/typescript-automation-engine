@@ -2,10 +2,10 @@
  * Worker Manager — spawns and manages the automation worker thread.
  *
  * Handles:
- * - Worker thread lifecycle (spawn, terminate, reload)
+ * - Worker thread lifecycle (spawn, terminate, reload, restart after a crash)
  * - Routing HA API calls from worker to ha-client
  * - Routing storage operations from worker to storage
- * - Forwarding HA events to worker subscriptions
+ * - Forwarding HA state changes and events to the worker
  * - Tracking automation status
  */
 
@@ -19,7 +19,25 @@ import {
   WorkerToMainMessage,
   AutomationInfo,
   WorkerConfig,
+  WorkerData,
+  ShutdownReason,
+  TraceInfo,
+  TraceTrigger,
 } from "../shared/messages";
+
+const SHUTDOWN_GRACE_MS = 5000;
+const MAX_TRACES_PER_AUTOMATION = 50;
+const RESTART_DELAY_MIN_MS = 5000;
+const RESTART_DELAY_MAX_MS = 5 * 60 * 1000;
+const STABLE_RUN_MS = 10 * 60 * 1000; //< a worker alive this long resets the restart backoff
+
+export interface AutomationTimeline {
+  automationId: string;
+  traces: TraceInfo[]; //< oldest first
+  ignoredCount: number; //< triggers that did nothing (no calls, logs or errors)
+  lastIgnoredAt?: number;
+  lastIgnoredTrigger?: TraceTrigger;
+}
 
 export class WorkerManager {
   private worker: Worker | null = null;
@@ -30,9 +48,17 @@ export class WorkerManager {
   // subId → { unsubscribe function, automationId }
   private subscriptions = new Map<string, { unsub: () => void; automationId: string }>();
   private automationListeners: ((automations: AutomationInfo[]) => void)[] = [];
+  private reloadListeners: (() => void)[] = [];
+  private timelines = new Map<string, AutomationTimeline>();
+  private timelineListeners: ((timeline: AutomationTimeline, trace: TraceInfo | null) => void)[] = [];
   private config: WorkerConfig;
   private initResolve?: () => void;
   private initReject?: (err: Error) => void;
+  private unsubStateForward: (() => void) | null = null;
+  private stopping = false;
+  private restartTimer: ReturnType<typeof setTimeout> | null = null;
+  private restartDelayMs = RESTART_DELAY_MIN_MS;
+  private spawnedAt = 0;
 
   constructor(
     haClient: HAClient,
@@ -58,12 +84,36 @@ export class WorkerManager {
     await this.spawnWorker();
   }
 
+  /** Called after an HA reconnect: start the worker, or resync its state copy. */
+  onHaConnected(): void {
+    if (this.worker) {
+      this.sendToWorker({ type: "stateSnapshot", states: this.haClient.getAllStates() });
+      return;
+    }
+    this.start().catch((err) => {
+      this.logger.log("error", "worker-mgr", `Worker start failed: ${err.message}`);
+    });
+  }
+
   async reload(): Promise<void> {
     this.logger.log("info", "worker-mgr", "Reloading automations...");
-    await this.terminateWorker();
+    this.cancelRestart();
+    await this.terminateWorker("reload");
     this.automations.clear();
     this.notifyListeners();
     await this.spawnWorker();
+    for (const listener of this.reloadListeners) {
+      try { listener(); } catch {}
+    }
+  }
+
+  /** Called after every successful reload, whoever triggered it. */
+  onReloaded(listener: () => void): void {
+    this.reloadListeners.push(listener);
+  }
+
+  isRunning(): boolean {
+    return this.worker !== null;
   }
 
   async stopAutomation(automationId: string): Promise<void> {
@@ -86,6 +136,52 @@ export class WorkerManager {
     };
   }
 
+  // ─── Timeline ───────────────────────────────────────────────
+
+  getTimelines(): AutomationTimeline[] {
+    return Array.from(this.timelines.values());
+  }
+
+  getTimeline(automationId: string): AutomationTimeline | undefined {
+    return this.timelines.get(automationId);
+  }
+
+  /** Called for every new or updated trace (trace null = only the ignored counter changed). */
+  onTimeline(listener: (timeline: AutomationTimeline, trace: TraceInfo | null) => void): () => void {
+    this.timelineListeners.push(listener);
+    return () => {
+      const index = this.timelineListeners.indexOf(listener);
+      if (index >= 0) this.timelineListeners.splice(index, 1);
+    };
+  }
+
+  private timelineFor(automationId: string): AutomationTimeline {
+    let timeline = this.timelines.get(automationId);
+    if (!timeline) {
+      timeline = { automationId, traces: [], ignoredCount: 0 };
+      this.timelines.set(automationId, timeline);
+    }
+    return timeline;
+  }
+
+  private storeTrace(trace: TraceInfo): void {
+    const timeline = this.timelineFor(trace.automationId);
+    const index = timeline.traces.findIndex((existing) => existing.id === trace.id && existing.startedAt === trace.startedAt);
+    if (index >= 0) {
+      timeline.traces[index] = trace;
+    } else {
+      timeline.traces.push(trace);
+      if (timeline.traces.length > MAX_TRACES_PER_AUTOMATION) timeline.traces.shift();
+    }
+    this.notifyTimeline(timeline, trace);
+  }
+
+  private notifyTimeline(timeline: AutomationTimeline, trace: TraceInfo | null): void {
+    for (const listener of this.timelineListeners) {
+      try { listener(timeline, trace); } catch {}
+    }
+  }
+
   private notifyListeners(): void {
     const list = this.getAutomations();
     for (const cb of this.automationListeners) {
@@ -102,33 +198,46 @@ export class WorkerManager {
 
       this.logger.log("info", "worker-mgr", `Spawning worker thread: ${workerPath}`);
 
-      this.worker = new Worker(workerPath, {
-        workerData: { config: this.config },
+      const workerData: WorkerData = { config: this.config, states: this.haClient.getAllStates() };
+      const worker = new Worker(workerPath, { workerData });
+      this.worker = worker;
+      this.spawnedAt = Date.now();
+
+      // One forwarder per worker; the worker keeps its own state copy and dispatches locally
+      this.unsubStateForward?.();
+      this.unsubStateForward = this.haClient.onStateChange((change) => {
+        if (this.worker !== worker) return;
+        this.sendToWorker({
+          type: "stateChanged",
+          entityId: change.entity_id,
+          oldState: change.old_state,
+          newState: change.new_state,
+        });
       });
 
-      this.worker.on("message", (msg: WorkerToMainMessage) => {
+      worker.on("message", (msg: WorkerToMainMessage) => {
         this.handleWorkerMessage(msg);
       });
 
-      this.worker.on("error", (err) => {
+      worker.on("error", (err) => {
         this.logger.log("error", "worker-mgr", `Worker error: ${err.message}`, {
           stack: err.stack,
         });
-        if (this.initReject) {
-          this.initReject(err);
-          this.initResolve = undefined;
-          this.initReject = undefined;
-        }
+        this.failInit(err);
       });
 
-      this.worker.on("exit", (code) => {
-        this.logger.log("info", "worker-mgr", `Worker exited with code ${code}`);
-        this.worker = null;
-        // Clean up all subscriptions
-        for (const { unsub } of this.subscriptions.values()) {
-          try { unsub(); } catch {}
+      worker.on("exit", (code) => {
+        if (this.worker === worker) {
+          this.worker = null;
         }
-        this.subscriptions.clear();
+        this.unsubStateForward?.();
+        this.unsubStateForward = null;
+        this.cleanupAllSubscriptions();
+        if (this.stopping) {
+          this.logger.log("info", "worker-mgr", `Worker exited with code ${code}`);
+          return;
+        }
+        this.handleUnexpectedExit(code);
       });
 
       // Send init message
@@ -137,6 +246,50 @@ export class WorkerManager {
         config: this.config,
       });
     });
+  }
+
+  private failInit(err: Error): void {
+    if (this.initReject) {
+      this.initReject(err);
+      this.initResolve = undefined;
+      this.initReject = undefined;
+    }
+  }
+
+  private handleUnexpectedExit(code: number): void {
+    const reason = `Worker exited unexpectedly (code ${code})`;
+    this.logger.log("error", "worker-mgr", `${reason} — automations stopped`);
+    for (const automation of this.automations.values()) {
+      automation.state = "error";
+      automation.error = reason;
+    }
+    this.notifyListeners();
+    this.failInit(new Error(reason));
+    this.scheduleRestart();
+  }
+
+  private scheduleRestart(): void {
+    if (this.restartTimer) return;
+    if (Date.now() - this.spawnedAt > STABLE_RUN_MS) {
+      this.restartDelayMs = RESTART_DELAY_MIN_MS;
+    }
+    const delay = this.restartDelayMs;
+    this.restartDelayMs = Math.min(this.restartDelayMs * 2, RESTART_DELAY_MAX_MS);
+    this.logger.log("info", "worker-mgr", `Restarting worker in ${Math.round(delay / 1000)}s...`);
+    this.restartTimer = setTimeout(() => {
+      this.restartTimer = null;
+      this.automations.clear();
+      this.start().catch((err) => {
+        this.logger.log("error", "worker-mgr", `Worker restart failed: ${err.message}`);
+      });
+    }, delay);
+  }
+
+  private cancelRestart(): void {
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = null;
+    }
   }
 
   private handleWorkerMessage(msg: WorkerToMainMessage): void {
@@ -159,11 +312,16 @@ export class WorkerManager {
         );
         break;
 
-      case "automationStateChanged":
+      case "automationStateChanged": {
         const existing = this.automations.get(msg.id);
         if (existing) {
           existing.state = msg.state;
           existing.error = msg.error;
+          if (msg.state === "running") {
+            existing.lastError = undefined;
+            existing.lastErrorAt = undefined;
+            existing.errorCount = 0;
+          }
           this.notifyListeners();
         }
         this.logger.log(
@@ -172,6 +330,18 @@ export class WorkerManager {
           `Automation ${msg.id} → ${msg.state}${msg.error ? ` (${msg.error})` : ""}`
         );
         break;
+      }
+
+      case "automationError": {
+        const existing = this.automations.get(msg.id);
+        if (existing) {
+          existing.lastError = msg.error;
+          existing.lastErrorAt = msg.at;
+          existing.errorCount = (existing.errorCount ?? 0) + 1;
+          this.notifyListeners();
+        }
+        break;
+      }
 
       case "automationRemoved":
         this.automations.delete(msg.id);
@@ -189,10 +359,18 @@ export class WorkerManager {
         this.logger.log("info", "worker-mgr", "Worker thread ready");
         break;
 
-      case "initComplete":
+      case "initComplete": {
+        // Keep error counters from messages that arrived during init
+        const previous = new Map(this.automations);
         this.automations.clear();
-        for (const a of msg.automations) {
-          this.automations.set(a.id, a);
+        for (const automation of msg.automations) {
+          const before = previous.get(automation.id);
+          this.automations.set(automation.id, {
+            ...automation,
+            lastError: before?.lastError,
+            lastErrorAt: before?.lastErrorAt,
+            errorCount: before?.errorCount,
+          });
         }
         this.notifyListeners();
         this.logger.log(
@@ -206,12 +384,26 @@ export class WorkerManager {
           this.initReject = undefined;
         }
         break;
+      }
 
       case "error":
         this.logger.log("error", "worker-mgr", `Worker error: ${msg.message}`, {
           stack: msg.stack,
         });
         break;
+
+      case "trace":
+        this.storeTrace(msg.trace);
+        break;
+
+      case "traceIgnored": {
+        const timeline = this.timelineFor(msg.automationId);
+        timeline.ignoredCount++;
+        timeline.lastIgnoredAt = msg.at;
+        timeline.lastIgnoredTrigger = msg.trigger;
+        this.notifyTimeline(timeline, null);
+        break;
+      }
     }
   }
 
@@ -244,24 +436,6 @@ export class WorkerManager {
             this.sendToWorker({ type: "event", subId, data: event });
           });
           this.subscriptions.set(subId, { unsub, automationId });
-          result = true;
-          break;
-        }
-
-        case "subscribeStateChange": {
-          const { entityId: stateEntityId, subId: stateSubId, automationId: stateAutoId } = args;
-          const unsub = this.haClient.onStateChange((data) => {
-            if (!stateEntityId || data.entity_id === stateEntityId) {
-              this.sendToWorker({
-                type: "stateChange",
-                subId: stateSubId,
-                entityId: data.entity_id,
-                oldState: data.old_state,
-                newState: data.new_state,
-              });
-            }
-          });
-          this.subscriptions.set(stateSubId, { unsub, automationId: stateAutoId });
           result = true;
           break;
         }
@@ -324,8 +498,8 @@ export class WorkerManager {
       }
 
       this.sendToWorker({ type: "response", id, result });
-    } catch (e: any) {
-      this.sendToWorker({ type: "response", id, error: e.message });
+    } catch (err: any) {
+      this.sendToWorker({ type: "response", id, error: err.message });
     }
   }
 
@@ -335,38 +509,47 @@ export class WorkerManager {
     }
   }
 
-  async terminateWorker(): Promise<void> {
-    if (!this.worker) return;
-
-    // Signal shutdown
-    this.sendToWorker({ type: "shutdown" });
-
-    // Give worker time to clean up, then force terminate
-    const worker = this.worker;
-    let exited = false;
-
-    await Promise.race([
-      new Promise<void>((resolve) => {
-        worker.once("exit", () => {
-          exited = true;
-          resolve();
-        });
-      }),
-      new Promise<void>((resolve) => {
-        setTimeout(() => resolve(), 5000);
-      }),
-    ]);
-
-    if (!exited && this.worker) {
-      this.logger.log("warn", "worker-mgr", "Worker did not exit gracefully, forcing termination");
-      await this.worker.terminate();
-      this.worker = null;
-    }
-
-    // Clean up all subscriptions
+  private cleanupAllSubscriptions(): void {
     for (const { unsub } of this.subscriptions.values()) {
       try { unsub(); } catch {}
     }
     this.subscriptions.clear();
+  }
+
+  async terminateWorker(reason: ShutdownReason = "stop"): Promise<void> {
+    if (reason === "stop") {
+      this.cancelRestart();
+    }
+    const worker = this.worker;
+    if (!worker) return;
+
+    this.stopping = true;
+    try {
+      // Give the worker time to clean up, then force terminate
+      let exited = false;
+      const exitPromise = new Promise<void>((resolve) => {
+        worker.once("exit", () => {
+          exited = true;
+          resolve();
+        });
+      });
+      this.sendToWorker({ type: "shutdown", reason });
+
+      await Promise.race([
+        exitPromise,
+        new Promise<void>((resolve) => setTimeout(resolve, SHUTDOWN_GRACE_MS)),
+      ]);
+
+      if (!exited) {
+        this.logger.log("warn", "worker-mgr", "Worker did not exit gracefully, forcing termination");
+        await worker.terminate();
+      }
+      if (this.worker === worker) {
+        this.worker = null;
+      }
+      this.cleanupAllSubscriptions();
+    } finally {
+      this.stopping = false;
+    }
   }
 }

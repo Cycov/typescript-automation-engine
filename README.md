@@ -8,7 +8,12 @@ Write and run Home Assistant automations in TypeScript with a managed runtime, b
 - **Worker thread isolation** - Automations run in a dedicated worker thread for clean reloads and fault isolation
 - **Built-in editor** - Monaco-based editor with TypeScript IntelliSense, syntax highlighting, and multi-tab support
 - **AI Friendly-ness** - Provides ai context files and since the language is typescipt, common AI assistants can make automations with ease
-- **Built-in AI integration** - Inline code completions and a chat sidebar powered by GitHub Models, OpenAI, or Anthropic
+- **Built-in AI integration** - Inline code completions and an AI chat that can look up entities, edit your files (each change approved by you), type-check, reload and read logs. Works with Anthropic (Claude), OpenAI, GitHub Models and DeepSeek
+- **MCP server** - Exposes the same tools to Claude Code and other MCP clients, so an AI on your computer can work on your automations
+- **Tests** - Simulated runs of your automations: set states, skip time, check what they call. No device is touched, and waits are instant
+- **Timeline** - What each automation did, run by run: trigger, service calls, logs, errors and timings
+- **File history** - Every save and AI edit is versioned; compare and restore any version, including deleted files
+- **Entity help in the editor** - Autocomplete and hover for entity ids, with a warning and quick fix for typos
 - **Code snippets** - Define reusable code templates in `.snippets` files with tab-stop placeholders
 - **File management** - Create, rename, delete, and drag-drop files/folders directly in the UI
 - **Lifecycle management** - Predictable automation lifecycle (`onStart` → `onStop` → `onReload` → `onUnload`)
@@ -132,11 +137,13 @@ export function onInit() {
 | Hook         | When Called                                                | Use For                                    |
 |--------------|-----------------------------------------------------------|--------------------------------------------|
 | `onStart()`  | Automation enters running state                           | Setting up subscriptions, initial logic     |
-| `onStop()`   | Automation is stopped (via UI, API, or error)             | Cleaning up timers and non-sub resources    |
-| `onReload()` | Engine reloads (all automations restart)                  | Handling reload-specific logic              |
-| `onUnload()` | Automation is permanently removed (before shutdown)       | Final cleanup                               |
+| `onStop()`   | Automation is stopped (via UI, API, reload or shutdown)   | Cleaning up timers and non-sub resources    |
+| `onReload()` | Engine is about to reload (before `onStop()`/`onUnload()`); fresh instances are then created from the new code | Saving state the new instance should pick up |
+| `onUnload()` | Automation is permanently removed (reload or shutdown)    | Final cleanup                               |
 
 **Important:** Event subscriptions are automatically cleaned up on stop - you do NOT need to manually unsubscribe in `onStop()`.
+
+**Errors:** if a subscription callback throws (or an awaited `callService` fails), the error is logged and shown as ⚠ next to the automation, and the automation **keeps running**. Only an error in `onStart()` puts it in the `error` state. If the worker thread itself dies, TAE restarts it automatically (with backoff).
 
 ## API Reference
 
@@ -256,6 +263,7 @@ const unsub = this.onStateChange(callback);
 |------------|------------|----------------------------------------------------------------|
 | `entityId` | `string`   | The full entity ID to watch. This is the entity's unique identifier in HA (e.g., `"binary_sensor.front_door"`, `"sensor.living_room_temperature"`, `"light.bedroom"`, `"switch.coffee_maker"`, `"person.john"`). Find entity IDs in HA → Settings → Devices & Services → Entities. |
 | `callback` | `function` | Called with a `StateChangeData` object containing: `entity_id` (string - the entity that changed), `old_state` (previous `HAEntityState \| null` - null if entity was just created), `new_state` (new `HAEntityState \| null` - null if entity was removed). Each state object has: `.state` (string value like `"on"`, `"off"`, `"22.5"`, `"home"`), `.attributes` (object with device-specific data), `.last_changed` (ISO timestamp when state value changed), `.last_updated` (ISO timestamp when any attribute changed). |
+| `emitAll` | `boolean?` | Default `false`: the callback only runs when the state **value** changes (attribute-only updates and entity removals are skipped). Pass `true` to receive every update, e.g. to react to brightness or temperature attributes. |
 | **Returns** | `() => void` | Unsubscribe function. Optional - auto-cleaned on stop. |
 
 ```typescript
@@ -284,8 +292,12 @@ this.onStateChange((data) => {
 Read the current state of any entity without subscribing to changes.
 
 ```typescript
-// From cache (fast, no network call - may be a few seconds stale)
+// From TAE's local copy of all states (no network call)
 const state = await this.getEntityState('sensor.temperature');
+
+// Same, synchronous - handy in helper functions
+import { getEntityState } from 'tae';
+const guestMode = getEntityState('input_boolean.guest_mode')?.state === 'on';
 
 // Live from HA (network call to HA API - always fresh but slower)
 const state = await this.fetchEntityState('sensor.temperature');
@@ -293,8 +305,9 @@ const state = await this.fetchEntityState('sensor.temperature');
 
 | Method | Parameter | Returns | Description |
 |--------|-----------|---------|-------------|
-| `getEntityState` | `entityId: string` | `Promise<HAEntityState \| undefined>` | Reads from the in-memory state cache (populated on connect, updated via subscription). Instant, no network call. Returns `undefined` if entity not found. |
-| `fetchEntityState` | `entityId: string` | `Promise<HAEntityState \| undefined>` | Makes a live API call to Home Assistant. Use when you need guaranteed fresh data, e.g., before making a decision based on current state. |
+| `this.getEntityState` | `entityId: string` | `Promise<HAEntityState \| undefined>` | Reads TAE's local copy of all states, kept in sync with HA. The copy is updated before state-change callbacks run, so it is current inside a callback. Returns `undefined` if the entity doesn't exist. |
+| `getEntityState` (standalone) | `entityId: string` | `HAEntityState \| undefined` | Same data, **synchronous**. |
+| `fetchEntityState` | `entityId: string` | `Promise<HAEntityState \| undefined>` | Makes a live API call to Home Assistant for one entity. Rarely needed. |
 
 The returned state object:
 
@@ -391,6 +404,9 @@ import {
   subscribeToEvent,    // Subscribe: subscribeToEvent(automation, eventType, callback)
   subscribeToStateChangeEvent,  // State sub: subscribeToStateChangeEvent(automation, entityId, callback)
   onStateChange,       // All states: onStateChange(automation, callback)
+  getEntityState,      // Synchronous state read: getEntityState(entityId)
+  fetchEntityState,    // Live state from HA: await fetchEntityState(entityId)
+  getAutomations,      // Registered automations: [{ id, className, state }]
   log, warn, error, debug,  // Standalone logging (source shown as "user")
   LogLevel,            // Enum: LogLevel.Debug, LogLevel.Info, LogLevel.Warn, LogLevel.Error
 } from 'tae';
@@ -464,6 +480,7 @@ The UI is divided into four areas:
 | Button          | Description                                                    |
 |-----------------|----------------------------------------------------------------|
 | **Export**      | Copies all automation files to the sync path (`/share/tae`)    |
+| **🕘 History**  | Versions of the open file (see [File History](#file-history)); 🕘 in the Files header shows recent changes in all files |
 | **Import**      | Overwrites automations from the sync path (with confirmation)  |
 | **Clear Logs**  | Clears the log panel and log buffer                            |
 | **Work with AI**| Opens a dialog to download entities list and SKILL.md for AI assistants |
@@ -476,7 +493,36 @@ Each automation in the sidebar shows:
 - The automation ID
 - On hover: **Start** or **Stop** button
 
-Click Start/Stop to control individual automations without a full reload.
+Click Start/Stop to control individual automations without a full reload. **⏱** opens the automation's [timeline](#timeline).
+
+### Entity IDs in the Editor
+
+- **Autocomplete**: inside a string, start typing an entity id (or part of its friendly name) to get suggestions with names and current states.
+- **Hover** an entity id to see its friendly name, state, area, device and attributes.
+- **Typos**: a string that looks like an entity id of a known domain but does not exist is underlined, with a quick fix (`Ctrl+.`) to the closest real id. `type_check` (AI tool) reports the same warnings.
+
+### Tests
+
+The **Tests** tab (bottom panel) holds test scenarios for your automations. A test runs in an isolated copy of your automations:
+
+- entity states are simulated: they start from the real states, with the values you set in **Before start**
+- the clock is simulated: a 10-minute wait finishes instantly, and timers in your code fire on the simulated clock
+- service calls are recorded, not sent, so no device reacts. With **Service calls change states**, `light.turn_on` makes the simulated light `on`, `cover.close_cover` makes the cover `closed`, and so on
+- storage writes stay inside the test, and network requests from automation code are blocked
+
+Steps run in order: **Set state**, **Wait**, **Fire event**, **Expect state**, **Expect service call** and **Expect no service call** (a service check counts the calls since the previous service check). **Start at** sets the simulated time of day (for code that checks the hour), and **Automations** picks which automations start (by default the ones defined in the test's file).
+
+Tests are saved per file and keep their last result. **▶ This file** runs every test of the open file; the result shows each step, every service call and log line, with simulated times. **■ Stop** ends a running test. The AI chat and MCP clients can list, write and run tests too.
+
+**Send calls to Home Assistant** turns a test into a way to try things on the real devices: the states stay simulated (so you can make it sunset, or fake motion), but the service calls the automations make are also sent to Home Assistant, and the devices react. Turn on **Waits take real time** to let a wait last as long as it says (to see a light go off after its timeout); otherwise waits are still instant. Real devices changing state can trigger your live automations too. Such tests are tagged **HA** in the list, and only run when you start them on their own: the AI's `run_test` and **▶ This file** run them simulated.
+
+### Timeline
+
+The **Timeline** tab shows what each automation did, newest first: what triggered the run (state change, event, timer, onStart), and the service calls, logs and errors it caused, with timings. Timers show what scheduled them (`5m after binary_sensor.motion on → off`). Runs that did nothing are only counted. The last 50 runs per automation are kept until TAE restarts.
+
+### File History
+
+Every save, AI edit, import, restore and delete is kept as a version, including changes made outside TAE (Samba, sync) the next time TAE writes the file. **🕘 History** shows the open file's versions: compare a version with the file now (**vs now**) or with the version before it (**what changed**), and **Restore** it. The 🕘 button in the Files header lists recent changes across all files, including deleted files. The last 200 versions per file are kept.
 
 ### File Saving Behavior
 
@@ -558,63 +604,71 @@ Click the **Work with AI** button in the toolbar to open a dialog for downloadin
 |------------|--------------|--------------------------------------------------|
 | `log_level`| `info`       | Minimum log level for **console output**: `debug`, `info`, `warn`, `error`. Note: all log levels are always visible in the UI regardless of this setting - the UI has its own level filter. |
 | `sync_path`| `/share/tae` | External directory for import/export sync        |
-| `ai_provider`| `none`     | AI provider: `none`, `github`, `openai`, or `anthropic` |
+| `ai_provider`| `none`     | AI provider: `none`, `anthropic`, `openai`, `github` or `deepseek` |
 | `ai_api_key`| `""`        | API key or Personal Access Token for the AI provider |
-| `ai_model`| `""`         | Model name for chat (e.g., `gpt-4o`, `claude-sonnet-4-20250514`) |
-| `ai_completion_model`| `""` | Model name for inline completions (optional, falls back to `ai_model`) |
+| `ai_model`| `""`         | Chat model. Empty = provider default (Anthropic: `claude-opus-5-5`, DeepSeek: `deepseek-chat`) |
+| `ai_completion_model`| `""` | Inline completion model. Empty = provider default (Anthropic: `claude-haiku-5-5`) or the chat model |
+| `mcp_token` | (unset) | Optional fixed token for the MCP server. When unset, TAE generates one (shown in AI settings) |
+
+AI settings saved from the TAE settings dialog (⚙ in the AI chat) are stored by TAE, survive restarts, and take precedence over the `ai_*` options above.
+
+The **Network** section has one port, `3201/tcp`, for the MCP server. Clear it to turn the MCP server off from outside the add-on.
 
 ## AI Integration
 
-TAE includes built-in AI assistance with **inline code completions** as you type and a **chat sidebar** for asking questions about your automations, Home Assistant APIs, and more.
+TAE includes **inline code completions** as you type and an **AI chat** that works on your automations with tools.
 
 ### Supported Providers
 
-| Provider | `ai_provider` | API Endpoint | Notes |
-|----------|--------------|--------------|-------|
-| GitHub Models | `github` | `models.inference.ai.azure.com` | Free with GitHub Copilot subscription |
-| OpenAI | `openai` | `api.openai.com/v1` | Requires OpenAI API key |
-| Anthropic | `anthropic` | `api.anthropic.com/v1` | Requires Anthropic API key |
+| Provider | `ai_provider` | Notes |
+|----------|--------------|-------|
+| Anthropic (Claude) | `anthropic` | Official Claude SDK, prompt caching. Defaults: `claude-opus-5-5` for chat, `claude-haiku-5-5` for completions |
+| OpenAI | `openai` | Any chat model with function calling |
+| GitHub Models | `github` | Free tier with a GitHub account. Model ids include the publisher, e.g. `openai/gpt-4.1` |
+| DeepSeek | `deepseek` | `deepseek-chat` |
 
-### Setting Up GitHub Models (recommended)
+### Setup
 
-GitHub Models is free if you have a GitHub Copilot subscription.
+1. Open the AI chat (**🤖 AI** or `Ctrl+Shift+I`) and click **⚙**.
+2. Pick a provider and paste an API key. **Load models** lists the models your key can use; leave the model fields empty to use the defaults.
+3. Optionally set **Chat effort** and **Inline completion effort**: higher effort thinks longer, which costs more tokens and time. *Model default* sends nothing (Claude's default is medium); completions default to low so they stay fast. A changed chat effort applies to new chats, so an ongoing chat keeps its prompt cache.
+4. Save. Settings are kept by TAE across restarts (you can also set the `ai_*` add-on options instead).
 
-1. Go to [github.com/settings/tokens](https://github.com/settings/tokens?type=beta) and click **Generate new token** (Fine-grained)
-2. Give it a name (e.g., "TAE AI")
-3. Under **Permissions**, expand **Account permissions** and set **GitHub Copilot** → **Read-only** and **Models** → **Read-only**
-4. Click **Generate token** and copy it
-5. In Home Assistant, go to **Settings → Add-ons → TypeScript Automation Engine → Configuration**
-6. Set:
-   - `ai_provider`: `github`
-   - `ai_api_key`: your token
-   - `ai_model`: e.g., `gpt-4o`, `gpt-4.1`, `claude-sonnet-4-20250514`
-   - `ai_completion_model`: (optional) a fast model for completions, e.g., `gpt-4o-mini`
-7. Restart the addon
+**Anthropic keys:** create one in the [Claude Console](https://platform.claude.com/settings/keys). If your Claude plan includes monthly API credits, claim them in claude.ai → Settings → Billing (this links a Console organization) and create the key in that organization so TAE uses the credits.
 
-> **Important:** The token **must** have the `models` permission. Without it you will get:
-> `AI API 401: The 'models' permission is required to access this endpoint`
-
-### Available Models (GitHub Models)
-
-Check [GitHub Models marketplace](https://github.com/marketplace/models) for the latest list. Some commonly used models:
-
-| Model | Best For |
-|-------|----------|
-| `gpt-4o` | General chat and completions |
-| `gpt-4o-mini` | Fast inline completions |
-| `gpt-4.1` | Chat with improved reasoning |
-| `claude-sonnet-4-20250514` | Chat (Anthropic via GitHub) |
+**GitHub Models:** create a fine-grained token at [github.com/settings/personal-access-tokens](https://github.com/settings/personal-access-tokens) with **Models: Read-only**.
 
 ### Using the AI Chat
 
-Click the **🤖 AI** button in the header (or press `Ctrl+Shift+I`) to open the chat sidebar. The AI automatically receives context about:
-- Your currently open file
-- Your Home Assistant entities
-- The TAE API reference (from SKILL.md)
+The AI has tools instead of a fixed context dump. It can:
+
+- search entities, devices, areas and services (`search_entities`, `get_entity`, `list_areas`, `list_services`)
+- read files, and edit or create them (`read_file`, `edit_file`, `write_file`, `delete_file`)
+- type-check the workspace (`type_check`), reload automations, start/stop one, and read the logs
+- call a Home Assistant service when you ask it to test something
+
+- see what an automation did (`get_automation_timeline`), and write and run [tests](#tests) (`list_tests`, `save_test`, `run_test`)
+- look at and restore earlier versions of a file (`file_history`, `restore_file_version`)
+
+Anything that changes something (file edits, reloads, starting/stopping, service calls, saving tests) shows a preview - a diff for file edits - and waits for **Allow** / **Deny**. **Always allow** skips the question for that tool for the rest of the chat. Running tests needs no approval, since they never touch devices. Each message also tells the AI which file is open, any unsaved editor content, and your selection.
+
+Type **@** to mention a file or an entity: its content or current state goes with the message. For Claude models, each reply shows an estimated cost and the chat's running total (hover the badge for details).
+
+Chats survive a page reload; **History** keeps the last 10 and can continue them.
 
 ### Inline Completions
 
 When AI is configured, you'll get automatic code suggestions as you type (after a short debounce). Press `Tab` to accept a suggestion or keep typing to dismiss it.
+
+## MCP Server (Claude Code and other AI apps)
+
+TAE serves the same tools over the [Model Context Protocol](https://modelcontextprotocol.io) on port **3201** (`http://<home-assistant-host>:3201/mcp`), protected by a bearer token. The exact command, with your token, is in the AI settings dialog (⚙ → MCP server):
+
+```bash
+claude mcp add --transport http tae http://homeassistant.local:3201/mcp --header "Authorization: Bearer <token>"
+```
+
+MCP clients also get `get_api_reference` (this repository's SKILL.md). Changes made through MCP are not approved in TAE - your MCP client (e.g. Claude Code's permission prompts) is responsible for that. The connection is plain HTTP: use it on your local network only. To turn it off, clear the `3201/tcp` port in the add-on's Network settings.
 
 ## Code Snippets
 
@@ -683,12 +737,15 @@ Snippet files are loaded automatically when TAE starts. After editing a `.snippe
 └─────────────────────────────────────────────────┘
 ```
 
-- **Main Process**: Runs Express HTTP/WS server, connects to HA via WebSocket, manages SQLite storage.
-- **Worker Thread**: Isolated thread that compiles and runs your TypeScript automations via ts-node. If an automation crashes, only the worker is affected.
+- **Main Process**: Runs Express HTTP/WS server, connects to HA via WebSocket, manages SQLite storage, the AI chat agent and the MCP server.
+- **Worker Thread**: Isolated thread that compiles and runs your TypeScript automations via ts-node. It keeps its own copy of all entity states, so `getEntityState` is synchronous. If the worker dies, the main process restarts it.
 - **Bridge**: MessagePort-based communication between main and worker. All HA API calls, storage operations, and event forwarding pass through the bridge.
 
 ## Security
 
+- **Ingress only**: the UI and its file API only accept connections from Home Assistant's ingress proxy, so other add-ons on the internal network can't reach them.
+- **MCP token**: the MCP server requires a bearer token (generated by TAE or set with `mcp_token`).
+- **AI approvals**: in the TAE chat, every change the AI makes waits for your approval.
 - **Child process blocking**: `child_process` module is blocked in automations for security.
 - **Path traversal protection**: All file operations are sandboxed to the automations directory.
 - **Supervisor token**: Authentication via HA supervisor token - never exposed to automations.
@@ -705,6 +762,43 @@ Snippet files are loaded automatically when TAE starts. After editing a `.snippe
 | Terminal command returns string error | Make sure to quote string arguments: `callService('light', 'turn_on', {entity_id: 'light.x'})` |
 
 ## Changelog
+
+### 1.9.1
+
+- **Feature**: tests can send their service calls to Home Assistant (**Send calls to Home Assistant**), so you can fake a trigger (sunset, motion) and watch the real devices react. **Waits take real time** makes waits last as long as they say. Such tests are tagged **HA**; the AI's `run_test` and **▶ This file** still run them simulated
+- **Feature**: **■ Stop** ends a running test
+- **Change**: entity, state and service fields in tests get a proper suggestion list (matches entity ids and friendly names, shows current states) instead of the browser's own
+- **Change**: the AI chat sidebar and the test result pane can be resized by dragging their left edge (double-click resets)
+
+### 1.9.0
+
+- **Feature**: **Tests** tab: scenarios that set entity states, wait and fire events, then check states and service calls. They run in an isolated copy of the automations with a simulated clock (waits are instant) and recorded service calls (no device reacts). Scenarios are saved per file and keep their last result; the AI can list, write and run them (`list_tests`, `get_test`, `save_test`, `run_test`)
+- **Feature**: **Timeline** tab: every run of every automation (state change, event, timer, onStart) with the service calls, logs and errors it caused and their timings; timers show what scheduled them. Also an AI tool (`get_automation_timeline`)
+- **Feature**: **File history**: every save, AI edit, import, restore and delete is versioned (also changes made outside TAE). Compare any version with the file now or with the version before it, and restore it, including deleted files (`🕘 History`, AI tools `file_history`, `restore_file_version`)
+- **Feature**: entity ids in the editor: autocomplete with friendly names, hover with state and attributes, and a warning with a quick fix for unknown ids (typos). `type_check` reports them too
+- **Feature**: AI chat: `@file` and `@entity` mentions attach the file or entity state to the message; estimated cost per reply and per chat for Claude models
+- **Change**: an error in a timer callback started by an automation now counts as that automation's error (⚠) instead of a worker error
+
+### 1.8.1
+
+- **Feature**: chat effort and inline completion effort in AI settings (Claude: `output_config.effort`; OpenAI-compatible: `reasoning_effort` where the model accepts it). A changed chat effort applies to new chats
+- **Fix**: the chat's "Context:" line now follows the open file, and shows unsaved edits and the selection
+
+### 1.8.0
+
+- **Feature**: AI chat with tools - entity/area/service lookup, file read/edit with approval and diff preview, type-check, reload, logs, service calls - for every provider
+- **Feature**: MCP server (port 3201, token protected) exposing the same tools to Claude Code and other MCP clients
+- **Feature**: Anthropic through the official SDK with current models (`claude-opus-5-5`, `claude-haiku-5-5` for completions) and prompt caching; DeepSeek added to the docs; GitHub Models moved to its current endpoint
+- **Feature**: AI settings saved in TAE persist across restarts; model list loaded from the provider
+- **Fix**: an error in a subscription callback (e.g. a failed `callService`) no longer stops the automation permanently; it is logged and shown as ⚠
+- **Fix**: standalone `getEntityState()` is synchronous as documented (it returned a Promise, so checks like `getEntityState(x)?.state === 'on'` were always false)
+- **Fix**: the worker thread is restarted automatically if it dies
+- **Fix**: `onReload()` is now called before a reload
+- **Fix**: event subscriptions are released in Home Assistant on stop/reload; TAE subscribes to `state_changed` only instead of every event
+- **Fix**: `fetchEntityState` fetches one entity instead of all states
+- **Fix**: the UI only accepts connections through ingress; automation names and errors are escaped in the sidebar
+- **Change**: Node.js 24 (base image 21.0.10); 32-bit platforms (armhf, armv7, i386) are no longer supported by the base image
+- **Docs**: SKILL.md corrected (only `index.ts`'s `onInit()` runs; `emitAll`; error behaviour)
 
 ### 1.7.0
 
