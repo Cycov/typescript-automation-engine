@@ -24,7 +24,10 @@ export interface RecordedServiceCall {
 }
 
 /** Sends a service call to Home Assistant through the main thread. */
-export type LiveServiceCaller = (args: { domain: string; service: string; data: Record<string, any>; automationId?: string }) => Promise<any>;
+export type LiveServiceCaller = (args: { domain: string; service: string; data: Record<string, any>; automationId?: string; returnResponse?: boolean }) => Promise<any>;
+export type LiveAIGenerator = (args: { automationId: string; prompt: string; options: Record<string, any> }) => Promise<string>;
+
+const AI_PLACEHOLDER_PROMPT_CHARS = 80;
 
 export interface TestHostOptions {
   startTimeMs: number;
@@ -32,6 +35,8 @@ export interface TestHostOptions {
   storage: Record<string, Record<string, any>>;
   /** Set to send service calls to Home Assistant. */
   liveCaller?: LiveServiceCaller;
+  /** Set to answer this.ai.generate with the real AI (live runs); otherwise a placeholder text. */
+  liveAI?: LiveAIGenerator;
 }
 
 interface StateEffect {
@@ -105,6 +110,7 @@ export class TestHost implements WorkerHost {
   private startTimeMs: number;
   private applyEffects: boolean;
   private liveCaller?: LiveServiceCaller;
+  private liveAI?: LiveAIGenerator;
   private pendingLiveCalls = new Set<Promise<unknown>>();
   liveCallCount = 0;
   private eventHandlers = new Map<string, EventHandler>(); // subId → handler
@@ -119,6 +125,7 @@ export class TestHost implements WorkerHost {
     this.startTimeMs = options.startTimeMs;
     this.applyEffects = options.applyEffects;
     this.liveCaller = options.liveCaller;
+    this.liveAI = options.liveAI;
     for (const [namespace, entries] of Object.entries(options.storage || {})) {
       for (const [key, value] of Object.entries(entries)) this.persistent.set(`${namespace}:${key}`, value);
     }
@@ -185,6 +192,8 @@ export class TestHost implements WorkerHost {
     switch (method) {
       case "callService":
         return this.recordServiceCall(args);
+      case "aiGenerate":
+        return this.aiGenerate(args);
       case "getEntityState":
       case "fetchEntityState":
         return this.states.get(args.entityId);
@@ -256,7 +265,27 @@ export class TestHost implements WorkerHost {
     return persistent ? this.persistent : this.temp;
   }
 
-  private recordServiceCall(args: { domain: string; service: string; data?: Record<string, any>; automationId?: string }): Promise<any> | null {
+  /** this.ai.generate in a test: the real AI on live runs, a placeholder otherwise. */
+  private aiGenerate(args: { automationId: string; prompt: string; options: Record<string, any> }): Promise<string> {
+    const promptStart = args.prompt.slice(0, AI_PLACEHOLDER_PROMPT_CHARS);
+    if (!this.liveAI) {
+      this.add("info", `AI text (placeholder, not sent): ${promptStart}`, { automationId: args.automationId, detail: args });
+      return Promise.resolve(`[AI text for: ${promptStart}]`);
+    }
+    const sent = this.liveAI(args).then((text) => {
+      this.add("info", `AI text: ${text}`, { automationId: args.automationId, detail: args });
+      return text;
+    });
+    const tracked = sent.then(
+      () => {},
+      (err: any) => this.add("error", `AI request failed: ${err?.message ?? err}`, { automationId: args.automationId })
+    );
+    this.pendingLiveCalls.add(tracked);
+    tracked.finally(() => this.pendingLiveCalls.delete(tracked));
+    return sent;
+  }
+
+  private recordServiceCall(args: { domain: string; service: string; data?: Record<string, any>; automationId?: string; returnResponse?: boolean }): Promise<any> | null {
     const data = args.data || {};
     const call: RecordedServiceCall = {
       at: this.now(),
@@ -291,7 +320,13 @@ export class TestHost implements WorkerHost {
 
     if (!this.liveCaller) return null;
     this.liveCallCount++;
-    const sent = this.liveCaller({ domain: args.domain, service: args.service, data, automationId: call.automationId });
+    const sent = this.liveCaller({
+      domain: args.domain,
+      service: args.service,
+      data,
+      automationId: call.automationId,
+      ...(args.returnResponse ? { returnResponse: true } : {}),
+    });
     const tracked = sent.then(
       () => {},
       (err: any) => this.add("error", `Home Assistant rejected ${callText}: ${err?.message ?? err}`, { automationId: call.automationId })

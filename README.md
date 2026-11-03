@@ -166,7 +166,7 @@ class MyAutomation extends Automation {
 Invoke any HA service. This is equivalent to calling a service from Developer Tools → Services.
 
 ```typescript
-const result = await this.callService(domain, service, data?)
+const result = await this.callService(domain, service, data?, options?)
 ```
 
 | Parameter | Type     | Description                                                    |
@@ -174,7 +174,8 @@ const result = await this.callService(domain, service, data?)
 | `domain`  | `string` | The service domain - the part before the dot in HA service calls. This is the integration or platform name. Examples: `"light"`, `"switch"`, `"climate"`, `"notify"`, `"media_player"`, `"automation"`, `"scene"`, `"script"`, `"input_boolean"`, `"input_number"`, `"input_select"`, `"input_text"`, `"cover"`, `"fan"`, `"vacuum"`, `"lock"`, `"alarm_control_panel"`, `"camera"`, `"tts"`, `"number"`, `"select"`, `"button"` |
 | `service` | `string` | The service action - the part after the dot. This tells HA what to do. Examples: `"turn_on"`, `"turn_off"`, `"toggle"`, `"set_temperature"`, `"send_message"`, `"set_hvac_mode"`, `"set_value"`, `"select_option"`, `"press"`, `"set_cover_position"`, `"set_speed"`, `"start"`, `"stop"`, `"set_volume_level"`, `"play_media"` |
 | `data`    | `object` | Optional service data payload. Almost always includes `entity_id` to target specific entities. Other parameters are service-specific - check HA Developer Tools → Services for the available fields for each service. |
-| **Returns** | `Promise<any>` | Resolves with the HA service response (usually `null` for fire-and-forget services). |
+| `options` | `object` | Optional. `{ returnResponse: true }` for services that return data (`weather.get_forecasts`, `calendar.get_events`, `todo.get_items`, …). |
+| **Returns** | `Promise<any>` | Resolves with the HA service response (usually `null` for fire-and-forget services); with `returnResponse`, the service's response data. |
 
 **Examples:**
 
@@ -214,6 +215,11 @@ await this.callService('script', 'turn_on', {
 await this.callService('switch', 'toggle', {
   entity_id: 'switch.garage_door',
 });
+
+// A service that returns data
+const response = await this.callService('weather', 'get_forecasts',
+  { entity_id: 'weather.forecast_home', type: 'daily' }, { returnResponse: true });
+const today = response['weather.forecast_home'].forecast[0]; // { condition, temperature, templow, ... }
 ```
 
 ### Subscribing to Events
@@ -390,6 +396,30 @@ await this.storage.temp.delete('counter');
 ```
 
 Values are JSON-serialized, so you can store strings, numbers, booleans, arrays, and plain objects.
+
+### AI Text
+
+`this.ai.generate(prompt, options?)` writes text with the AI provider set in TAE's AI settings (see [AI Integration](#ai-integration)), for example a spoken good-morning message or the wording of a notification.
+
+```typescript
+let message = `Good morning, it's ${time}.`; // keep a fallback
+try {
+  message = await this.ai.generate(`It is ${time}. Weather today: ${weather}. Write a short good-morning message.`, {
+    system: 'You are a cheerful home assistant. One or two sentences, plain text, it will be spoken aloud.',
+  });
+} catch (err: any) {
+  this.warn(`AI text failed: ${err.message}`);
+}
+```
+
+| Option | Description |
+|--------|-------------|
+| `system` | Instructions: role, tone, language, length, format |
+| `model` | `"fast"` (default) uses the completion model, e.g. Claude Haiku; `"smart"` uses the chat model |
+| `maxTokens` | Answer length cap (default 500, at most 4000) |
+| `timeoutMs` | Give up after this long (default 30 s, at most 120 s) |
+
+It rejects when AI isn't configured, the request fails or times out, or the automation passes **30 requests per hour**, so always keep a fallback. Each request's model, tokens and approximate cost are written to the automation's log. In tests it returns a placeholder (`[AI text for: …]`) without calling the AI; live test runs use the real AI.
 
 ### Standalone Functions
 
@@ -766,6 +796,11 @@ Snippet files are loaded automatically when TAE starts. After editing a `.snippe
 | Terminal command returns string error | Make sure to quote string arguments: `callService('light', 'turn_on', {entity_id: 'light.x'})` |
 
 ## Changelog
+
+### 1.10.0
+
+- **Feature**: **AI in automations**: `this.ai.generate(prompt, options?)` writes text with the provider and key from TAE's AI settings: spoken announcements, notification wording, summaries. Options: `system` (instructions), `model` (`"fast"` = completion model, default; `"smart"` = chat model), `maxTokens`, `timeoutMs`. Each request's model, tokens and cost go to the automation's log; an automation can make 30 requests per hour. Tests return a placeholder text, live test runs use the real AI
+- **Feature**: `callService(domain, service, data, { returnResponse: true })` resolves with the service's response data, for services such as `weather.get_forecasts`, `calendar.get_events` and `todo.get_items`
 
 ### 1.9.4
 

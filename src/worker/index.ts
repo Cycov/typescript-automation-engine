@@ -42,12 +42,14 @@ Module._resolveFilename = function (request: string, parent: any, ...rest: any[]
 // ─── Initialize bridge and manager ──────────────────────────
 
 const bridge = new Bridge();
+const TEST_AI_BRIDGE_SLACK_MS = 5000;
 const testHost = testSpec
   ? new TestHost(data?.states ?? [], {
       startTimeMs: testSpec.startTimeMs,
       applyEffects: testSpec.scenario.applyEffects,
       storage: testSpec.storage,
       liveCaller: testSpec.liveCalls ? (args) => bridge.request("callService", args) : undefined,
+      liveAI: testSpec.liveCalls ? (args) => bridge.request("aiGenerate", args, args.options.timeoutMs + TEST_AI_BRIDGE_SLACK_MS) : undefined,
     })
   : null;
 const host: WorkerHost = testHost ?? bridge;

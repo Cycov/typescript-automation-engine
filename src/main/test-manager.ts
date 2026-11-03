@@ -11,6 +11,7 @@ import { z } from "zod";
 import { HAClient } from "./ha-client";
 import { Storage } from "./storage";
 import { Logger } from "./logging";
+import type { AIGenerator } from "./worker-manager";
 import { HAEntityState, MainToWorkerMessage, WorkerConfig, WorkerData, WorkerToMainMessage } from "../shared/messages";
 import { TestResult, TestScenario } from "../shared/tests";
 
@@ -106,11 +107,18 @@ export class TestManager {
   private listeners: ((event: TestRunEvent) => void)[] = [];
   private current: { scenarioId: string; stop: () => void } | null = null;
 
+  private aiGenerator?: AIGenerator;
+
   constructor(haClient: HAClient, storage: Storage, logger: Logger, config: WorkerConfig) {
     this.haClient = haClient;
     this.storage = storage;
     this.logger = logger;
     this.config = config;
+  }
+
+  /** Live runs answer this.ai.generate with the real AI. */
+  setAIGenerator(generator: AIGenerator): void {
+    this.aiGenerator = generator;
   }
 
   onRun(listener: (event: TestRunEvent) => void): () => void {
@@ -231,19 +239,24 @@ export class TestManager {
     });
   }
 
-  /** A test worker only asks the main thread to send live service calls. */
+  /** A test worker only asks the main thread for live service calls and AI text. */
   private async answerRequest(worker: Worker, id: number, method: string, args: any, liveCalls: boolean, testName: string): Promise<void> {
     const reply = (msg: MainToWorkerMessage) => {
       try { worker.postMessage(msg); } catch {} //< the worker may be gone already
     };
-    if (method !== "callService" || !liveCalls) {
+    const allowed = method === "callService" || (method === "aiGenerate" && !!this.aiGenerator);
+    if (!allowed || !liveCalls) {
       reply({ type: "response", id, error: `${method} is not available in tests` });
       return;
     }
     try {
+      if (method === "aiGenerate") {
+        reply({ type: "response", id, result: await this.aiGenerator!(args) });
+        return;
+      }
       const target = args.data?.entity_id ?? args.data?.target?.entity_id;
       this.logger.log("info", "tests", `Test "${testName}": ${args.domain}.${args.service}${target ? " → " + [].concat(target).join(", ") : ""}`);
-      const result = await this.haClient.callService(args.domain, args.service, args.data);
+      const result = await this.haClient.callService(args.domain, args.service, args.data, undefined, { returnResponse: !!args.returnResponse });
       reply({ type: "response", id, result });
     } catch (err: any) {
       reply({ type: "response", id, error: err?.message ?? String(err) });

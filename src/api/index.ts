@@ -22,12 +22,16 @@ export {
   PersistentStorage,
   TempStorage,
   AutomationStorage,
+  AutomationAI,
+  AIGenerateOptions,
+  CallServiceOptions,
   LogLevel,
 } from "./types";
 
 // ─── Import manager accessor ────────────────────────────────
 
 import { Automation } from "./automation";
+import type { CallServiceOptions } from "./types";
 
 function getManager(): any {
   const mgr = (global as any).__tae_automation_manager;
@@ -70,9 +74,10 @@ export async function callService(
   automation: Automation,
   domain: string,
   service: string,
-  data?: Record<string, any>
+  data?: Record<string, any>,
+  options?: CallServiceOptions
 ): Promise<any> {
-  return getManager().callService(automation, domain, service, data);
+  return getManager().callService(automation, domain, service, data, options);
 }
 
 /**

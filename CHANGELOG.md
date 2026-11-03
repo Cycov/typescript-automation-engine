@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.10.0
+
+- **Feature**: **AI in automations**: `this.ai.generate(prompt, options?)` writes text with the provider and key from TAE's AI settings: spoken announcements, notification wording, summaries. Options: `system` (instructions), `model` (`"fast"` = completion model, default; `"smart"` = chat model), `maxTokens`, `timeoutMs`. Each request's model, tokens and cost go to the automation's log; an automation can make 30 requests per hour. Tests return a placeholder text, live test runs use the real AI
+- **Feature**: `callService(domain, service, data, { returnResponse: true })` resolves with the service's response data, for services such as `weather.get_forecasts`, `calendar.get_events` and `todo.get_items`
+
 ## 1.9.4
 
 - **Change**: AI chat edits show what they changed even after **Always allow**: the tool card has the diff and a "+N −M" line count in its header (approval requests show the count too), so a comment-only edit can be told apart from a logic change at a glance. Export includes it

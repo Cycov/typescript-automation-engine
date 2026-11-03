@@ -65,8 +65,15 @@ export interface ChatProvider {
   ): Promise<TurnResult>;
 }
 
+export interface GenerateResult {
+  text: string;
+  usage: TurnUsage;
+}
+
 export interface CompletionProvider {
   complete(system: string, user: string, effort: EffortLevel, signal: AbortSignal): Promise<string>;
+  /** Plain text generation (automations' this.ai.generate). Rejects on abort. */
+  generate(system: string, user: string, maxTokens: number, effort: EffortLevel, signal: AbortSignal): Promise<GenerateResult>;
 }
 
 /** An error whose message is safe and useful to show the user. */

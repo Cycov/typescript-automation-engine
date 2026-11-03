@@ -8,6 +8,7 @@ import {
   ChatProvider,
   CompletionProvider,
   EffortLevel,
+  GenerateResult,
   ProviderError,
   StopReason,
   ToolResultItem,
@@ -158,18 +159,38 @@ export class AnthropicCompletion implements CompletionProvider {
   }
 
   async complete(system: string, user: string, effort: EffortLevel, signal: AbortSignal): Promise<string> {
+    try {
+      return (await this.run(system, user, effort, signal, COMPLETION_MAX_TOKENS, COMPLETION_STOP_SEQUENCES)).text;
+    } catch (err: any) {
+      if (err instanceof Anthropic.APIUserAbortError || signal.aborted) return "";
+      throw err;
+    }
+  }
+
+  generate(system: string, user: string, maxTokens: number, effort: EffortLevel, signal: AbortSignal): Promise<GenerateResult> {
+    return this.run(system, user, effort, signal, maxTokens);
+  }
+
+  private async run(
+    system: string,
+    user: string,
+    effort: EffortLevel,
+    signal: AbortSignal,
+    maxTokens: number,
+    stopSequences?: string[]
+  ): Promise<GenerateResult> {
     const rejectedKey = `${this.model}\u0000${effort}`;
     const sentEffort: EffortLevel = rejectedEfforts.has(rejectedKey) ? "" : effort;
     try {
-      return await this.request(system, user, signal, sentEffort);
+      return await this.request(system, user, signal, sentEffort, maxTokens, stopSequences);
     } catch (err: any) {
-      if (err instanceof Anthropic.APIUserAbortError || signal.aborted) return "";
+      if (err instanceof Anthropic.APIUserAbortError || signal.aborted) throw err;
       if (sentEffort && err instanceof Anthropic.BadRequestError) {
         // The model rejects this effort level; remember that only if the plain request works
         try {
-          const text = await this.request(system, user, signal, "");
+          const result = await this.request(system, user, signal, "", maxTokens, stopSequences);
           rejectedEfforts.add(rejectedKey);
-          return text;
+          return result;
         } catch {}
       }
       if (err instanceof Anthropic.APIError) throw new ProviderError(describeError(err, this.model));
@@ -177,22 +198,38 @@ export class AnthropicCompletion implements CompletionProvider {
     }
   }
 
-  private async request(system: string, user: string, signal: AbortSignal, effort: EffortLevel): Promise<string> {
+  private async request(
+    system: string,
+    user: string,
+    signal: AbortSignal,
+    effort: EffortLevel,
+    maxTokens: number,
+    stopSequences?: string[]
+  ): Promise<GenerateResult> {
     const message = await this.client.messages.create(
       {
         model: this.model,
-        max_tokens: COMPLETION_MAX_TOKENS,
+        max_tokens: maxTokens,
         system,
         messages: [{ role: "user", content: user }],
-        stop_sequences: COMPLETION_STOP_SEQUENCES,
+        ...(stopSequences ? { stop_sequences: stopSequences } : {}),
         ...(effort ? { output_config: { effort } } : {}),
       },
       { signal }
     );
-    return message.content
+    const text = message.content
       .filter((block): block is Anthropic.TextBlock => block.type === "text")
       .map((block) => block.text)
       .join("");
+    return {
+      text,
+      usage: {
+        inputTokens: message.usage.input_tokens,
+        outputTokens: message.usage.output_tokens,
+        cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
+        cacheWriteTokens: message.usage.cache_creation_input_tokens ?? 0,
+      },
+    };
   }
 }
 

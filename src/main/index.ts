@@ -25,6 +25,7 @@ import { FileManager } from "./file-manager";
 import { AISettings, AIConfig, AIOptions, PROVIDER_IDS, ProviderId } from "./ai/config";
 import { ChatAgent, ApprovalDecision } from "./ai/agent";
 import { AIMemory } from "./ai/memory";
+import { AutomationAI } from "./ai/automation-ai";
 import { listModels } from "./ai/providers";
 import { EFFORT_LEVELS, EffortLevel, ProviderError } from "./ai/types";
 import { TypeChecker } from "./tools/type-check";
@@ -117,6 +118,10 @@ const testManager = new TestManager(haClient, storage, logger, {
   automationsPath: AUTOMATIONS_PATH,
   logLevel,
 });
+
+const automationAI = new AutomationAI(aiSettings, logger);
+workerManager.setAIGenerator((request) => automationAI.generate(request));
+testManager.setAIGenerator((request) => automationAI.generate(request));
 
 function loadSkillMarkdown(): string {
   // In Docker: /app/SKILL.md; in dev: project root

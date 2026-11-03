@@ -18,6 +18,8 @@ import {
   StateChangeCallback,
   UnsubscribeFunction,
   AutomationStorage,
+  AutomationAI,
+  CallServiceOptions,
   PersistentStorage,
   TempStorage,
   LogLevel,
@@ -62,6 +64,17 @@ export abstract class Automation {
   public readonly storage: AutomationStorage;
 
   /**
+   * Text generation with the AI provider set in TAE's AI settings (the same key the AI chat uses).
+   * Each request costs credits; TAE logs the cost and limits requests per automation per hour.
+   *
+   * @example
+   * const text = await this.ai.generate(`Write a one-sentence good-morning message. It is ${time}.`, {
+   *   system: 'You are a friendly home assistant. Answer with the message only.',
+   * });
+   */
+  public readonly ai: AutomationAI;
+
+  /**
    * Create a new automation instance.
    *
    * @param id - Optional custom ID. If omitted, an ID is auto-generated from the class name.
@@ -100,6 +113,7 @@ export abstract class Automation {
       delete: (key: string) => getManager().storageDelete(automationId, key, false),
     };
     this.storage = { persistent, temp };
+    this.ai = { generate: (prompt, options) => getManager().aiGenerate(this, prompt, options) };
   }
 
   // ─── Lifecycle hooks (override in subclass) ────────────────
@@ -155,7 +169,8 @@ export abstract class Automation {
    *   Examples: `"turn_on"`, `"turn_off"`, `"toggle"`, `"set_temperature"`, `"send_message"`.
    * @param data - Optional service data payload. Typically includes `entity_id` and
    *   service-specific parameters.
-   * @returns A promise that resolves with the HA service response.
+   * @param options - `{ returnResponse: true }` for services that return data.
+   * @returns A promise that resolves with the HA service response; with `returnResponse`, the service's response data.
    *
    * @example
    * // Turn on a light with brightness
@@ -177,13 +192,20 @@ export abstract class Automation {
    * await this.callService('switch', 'toggle', {
    *   entity_id: 'switch.garage_door',
    * });
+   *
+   * @example
+   * // A service that returns data
+   * const response = await this.callService('weather', 'get_forecasts',
+   *   { entity_id: 'weather.home', type: 'daily' }, { returnResponse: true });
+   * const today = response['weather.home'].forecast[0];
    */
   async callService(
     domain: string,
     service: string,
-    data?: Record<string, any>
+    data?: Record<string, any>,
+    options?: CallServiceOptions
   ): Promise<any> {
-    return getManager().callService(this, domain, service, data);
+    return getManager().callService(this, domain, service, data, options);
   }
 
   /**

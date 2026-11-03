@@ -17,6 +17,10 @@ import { HAEntityState, ShutdownReason, TraceAction, TraceInfo, TraceTrigger } f
 const TRACE_MAX_ACTIONS = 100;
 const TRACE_FLUSH_MS = 250;
 const TRACE_LOG_MAX_CHARS = 500;
+const AI_DEFAULT_TIMEOUT_MS = 30000;
+const AI_MAX_TIMEOUT_MS = 120000;
+const AI_BRIDGE_SLACK_MS = 5000; //< main enforces the timeout; this only catches a lost reply
+const AI_LOG_PROMPT_CHARS = 200;
 const nativeSetTimeout = setTimeout; //< flushes must not create timer traces themselves
 
 // Import Automation type — at runtime this is the compiled version
@@ -228,7 +232,8 @@ export class AutomationManager {
     automation: AutomationInstance,
     domain: string,
     service: string,
-    data?: Record<string, any>
+    data?: Record<string, any>,
+    options?: { returnResponse?: boolean }
   ): Promise<any> {
     this.assertRunning(automation);
     this.bridge.sendLog(
@@ -238,8 +243,9 @@ export class AutomationManager {
       data
     );
     const recorded = this.record({ kind: "service", domain, service, data });
+    const returnResponse = !!options?.returnResponse;
     try {
-      return await this.bridge.request("callService", { domain, service, data, automationId: automation.id });
+      return await this.bridge.request("callService", { domain, service, data, automationId: automation.id, ...(returnResponse ? { returnResponse } : {}) });
     } catch (err: any) {
       if (recorded && recorded.action.kind === "service") {
         recorded.action.error = err.message;
@@ -348,6 +354,19 @@ export class AutomationManager {
   }
 
   // ─── Logging ───────────────────────────────────────────────
+
+  /** this.ai.generate: text from the AI provider set in TAE (main enforces the timeout and limits). */
+  async aiGenerate(automation: AutomationInstance, prompt: string, options: Record<string, any> = {}): Promise<string> {
+    this.assertRunning(automation);
+    const timeoutMs = Math.min(Math.max(Number(options.timeoutMs) || AI_DEFAULT_TIMEOUT_MS, 1), AI_MAX_TIMEOUT_MS);
+    const text = String(prompt ?? "");
+    this.logMessage("debug", automation.id, `AI request: ${text.slice(0, AI_LOG_PROMPT_CHARS)}`);
+    return this.bridge.request(
+      "aiGenerate",
+      { automationId: automation.id, prompt: text, options: { ...options, timeoutMs } },
+      timeoutMs + AI_BRIDGE_SLACK_MS
+    );
+  }
 
   logMessage(level: string, automationId: string, message: any, extra?: any): void {
     this.bridge.sendLog(level, automationId, message, extra);

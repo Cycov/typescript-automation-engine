@@ -7,6 +7,7 @@ import {
   ChatProvider,
   CompletionProvider,
   EffortLevel,
+  GenerateResult,
   ProviderError,
   StopReason,
   ToolCall,
@@ -255,6 +256,29 @@ export class OpenAICompatibleCompletion implements CompletionProvider {
       if (err?.name === "AbortError" || signal.aborted) return "";
       throw err;
     }
+  }
+
+  async generate(system: string, user: string, maxTokens: number, effort: EffortLevel, signal: AbortSignal): Promise<GenerateResult> {
+    const body = {
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+      ...tokenLimit(this.provider, maxTokens),
+    };
+    const res = await postChatCompletion(this.provider, this.apiKey, this.model, body, effort, signal);
+    if (!res.ok) throw await errorFromResponse(LABELS[this.provider], res);
+    const data = (await res.json()) as any;
+    const cached = data.usage?.prompt_tokens_details?.cached_tokens ?? data.usage?.prompt_cache_hit_tokens ?? 0;
+    return {
+      text: data.choices?.[0]?.message?.content || "",
+      usage: {
+        inputTokens: Math.max(0, (data.usage?.prompt_tokens ?? 0) - cached), //< prompt_tokens includes cached ones
+        outputTokens: data.usage?.completion_tokens ?? 0,
+        cacheReadTokens: cached,
+        cacheWriteTokens: 0,
+      },
+    };
   }
 }
 

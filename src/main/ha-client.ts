@@ -294,7 +294,8 @@ export class HAClient {
     domain: string,
     service: string,
     data?: Record<string, any>,
-    target?: { entity_id?: string | string[]; device_id?: string | string[]; area_id?: string | string[] }
+    target?: { entity_id?: string | string[]; device_id?: string | string[]; area_id?: string | string[] },
+    options?: { returnResponse?: boolean }
   ): Promise<any> {
     const msg: any = {
       type: "call_service",
@@ -304,6 +305,11 @@ export class HAClient {
     };
     if (target) {
       msg.target = target;
+    }
+    if (options?.returnResponse) {
+      msg.return_response = true;
+      const result = await this.sendCommand(msg);
+      return result?.response;
     }
     return this.sendCommand(msg);
   }

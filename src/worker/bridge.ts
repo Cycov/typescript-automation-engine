@@ -25,7 +25,7 @@ export type StateSnapshotHandler = (states: HAEntityState[]) => void;
 
 /** What the automation manager needs from its environment: the main thread, or a test simulation. */
 export interface WorkerHost {
-  request(method: string, args: any): Promise<any>;
+  request(method: string, args: any, timeoutMs?: number): Promise<any>;
   onEvent(subId: string, handler: EventHandler): void;
   removeHandler(subId: string): void;
   onStateChanged(handler: StateChangedHandler): void;
@@ -132,7 +132,7 @@ export class Bridge implements WorkerHost {
   /**
    * Send a request to main and wait for response.
    */
-  request(method: string, args: any): Promise<any> {
+  request(method: string, args: any, timeoutMs: number = REQUEST_TIMEOUT_MS): Promise<any> {
     return new Promise((resolve, reject) => {
       this.requestId++;
       const id = this.requestId;
@@ -141,7 +141,7 @@ export class Bridge implements WorkerHost {
           this.pendingRequests.delete(id);
           reject(new Error(`Request ${method} timed out`));
         }
-      }, REQUEST_TIMEOUT_MS);
+      }, timeoutMs);
       this.pendingRequests.set(id, { resolve, reject, timer });
       this.send({ type: "request", id, method, args });
     });

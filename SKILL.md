@@ -93,7 +93,7 @@ enum LogLevel {
 
 ### Instance Methods (available via `this.` inside an Automation subclass)
 
-#### `this.callService(domain, service, data?)`
+#### `this.callService(domain, service, data?, options?)`
 Call any Home Assistant service.
 
 | Param    | Type                     | Description |
@@ -101,7 +101,14 @@ Call any Home Assistant service.
 | `domain` | `string`                 | Service domain: `"light"`, `"switch"`, `"climate"`, `"notify"`, `"media_player"`, `"automation"`, `"scene"`, `"script"`, `"input_boolean"`, `"input_number"`, `"input_select"`, `"input_text"`, `"cover"`, `"fan"`, `"vacuum"`, `"lock"`, `"alarm_control_panel"`, `"camera"`, `"tts"`, `"number"`, `"select"`, `"button"` |
 | `service`| `string`                 | Action: `"turn_on"`, `"turn_off"`, `"toggle"`, `"set_temperature"`, `"send_message"`, `"set_hvac_mode"`, `"set_value"`, `"select_option"`, `"press"`, `"set_cover_position"`, `"set_speed"`, `"start"`, `"stop"`, `"set_volume_level"`, `"play_media"` |
 | `data`   | `Record<string, any>?`   | Usually includes `entity_id`. Other fields are service-specific. |
-| Returns  | `Promise<any>`           | HA response (usually null for fire-and-forget). |
+| `options`| `{ returnResponse?: boolean }?` | `returnResponse: true` for services that return data (`weather.get_forecasts`, `calendar.get_events`, `todo.get_items`, …). |
+| Returns  | `Promise<any>`           | HA response (usually null for fire-and-forget); with `returnResponse`, the service's response data. |
+
+```typescript
+const response = await this.callService('weather', 'get_forecasts',
+  { entity_id: 'weather.forecast_home', type: 'daily' }, { returnResponse: true });
+const today = response['weather.forecast_home'].forecast[0]; // { condition, temperature, templow, precipitation, ... }
+```
 
 #### `this.subscribeToStateChangeEvent(entityId, callback, emitAll?)`
 Watch a specific entity for state changes. **This is the most commonly used method.**
@@ -170,6 +177,31 @@ await this.storage.temp.set('key', value);
 const val = await this.storage.temp.get('key');
 await this.storage.temp.delete('key');
 ```
+
+#### AI text: `this.ai.generate(prompt, options?)`
+Generate text with the AI provider set in TAE's AI settings (spoken announcements, notification wording, summaries).
+Resolves with the answer, trimmed. It **rejects** when AI isn't configured, the request fails or times out, or the
+automation passes 30 requests per hour — always keep a plain fallback text. Each request costs credits and TAE logs it.
+
+| Option      | Type                  | Description |
+|-------------|-----------------------|-------------|
+| `system`    | `string?`             | Instructions: role, tone, language, length, format. |
+| `model`     | `"fast" \| "smart"`  | `"fast"` (default): the completion model (e.g. Claude Haiku). `"smart"`: the chat model. |
+| `maxTokens` | `number?`             | Answer length cap (default 500, at most 4000). |
+| `timeoutMs` | `number?`             | Give up after this long (default 30000, at most 120000). |
+
+```typescript
+let message = `Good morning, it's ${time}.`; // fallback
+try {
+  message = await this.ai.generate(`It is ${time}. Weather today: ${weather}. Write a short good-morning message.`, {
+    system: 'You are a cheerful home assistant. One or two sentences, plain text, it will be spoken aloud.',
+  });
+} catch (err: any) {
+  this.warn(`AI text failed: ${err.message}`);
+}
+```
+
+In tests the AI is not called: `generate` returns a placeholder (`[AI text for: …]`); with live calls on, it uses the real AI.
 
 ### Standalone Functions
 
@@ -547,6 +579,7 @@ export async function onInit() {
 - Don't manually unsubscribe in `onStop()` — subscriptions are auto-cleaned
 - Don't call `startAutomation()` before `registerAutomation()`
 - Don't use `fetchEntityState` inside high-frequency callbacks — use `getEntityState` instead
+- Don't call `this.ai.generate` from frequent triggers (state changes of sensors, short timers): it costs money and is rate-limited
 
 ## Entity ID Format
 
@@ -603,5 +636,8 @@ import {
   PersistentStorage,
   TempStorage,
   AutomationStorage,
+  AutomationAI,
+  AIGenerateOptions,
+  CallServiceOptions,
 } from 'tae';
 ```

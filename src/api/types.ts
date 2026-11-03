@@ -55,3 +55,29 @@ export interface AutomationStorage {
   persistent: PersistentStorage;
   temp: TempStorage;
 }
+
+export interface CallServiceOptions {
+  /** Ask Home Assistant for the service's response data (e.g. `weather.get_forecasts`); the call then resolves with it. */
+  returnResponse?: boolean;
+}
+
+export interface AIGenerateOptions {
+  /** Instructions for the model: role, tone, format, length. */
+  system?: string;
+  /** `"fast"` (default) uses the completion model (e.g. Claude Haiku), `"smart"` the chat model. */
+  model?: "fast" | "smart";
+  /** Upper bound on the answer length in tokens (default 500, at most 4000). */
+  maxTokens?: number;
+  /** Give up after this long (default 30 s, at most 120 s). */
+  timeoutMs?: number;
+}
+
+/** Text generation with the AI provider set in TAE's AI settings. */
+export interface AutomationAI {
+  /**
+   * Generate text from a prompt. Resolves with the model's answer, trimmed.
+   * Rejects when AI is not configured, the request fails or times out, or the
+   * automation exceeds its hourly request limit — keep a fallback text.
+   */
+  generate(prompt: string, options?: AIGenerateOptions): Promise<string>;
+}

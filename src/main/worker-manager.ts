@@ -39,6 +39,9 @@ export interface AutomationTimeline {
   lastIgnoredTrigger?: TraceTrigger;
 }
 
+/** Answers this.ai.generate requests from automations. */
+export type AIGenerator = (request: { automationId: string; prompt: string; options?: Record<string, any> }) => Promise<string>;
+
 export class WorkerManager {
   private worker: Worker | null = null;
   private haClient: HAClient;
@@ -58,6 +61,7 @@ export class WorkerManager {
   private stopping = false;
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
   private restartDelayMs = RESTART_DELAY_MIN_MS;
+  private aiGenerator?: AIGenerator;
   private spawnedAt = 0;
 
   constructor(
@@ -407,14 +411,24 @@ export class WorkerManager {
     }
   }
 
+  setAIGenerator(generator: AIGenerator): void {
+    this.aiGenerator = generator;
+  }
+
   private async handleRequest(id: number, method: string, args: any): Promise<void> {
     try {
       let result: any;
 
       switch (method) {
         case "callService": {
-          const { domain, service, data } = args;
-          result = await this.haClient.callService(domain, service, data);
+          const { domain, service, data, returnResponse } = args;
+          result = await this.haClient.callService(domain, service, data, undefined, { returnResponse });
+          break;
+        }
+
+        case "aiGenerate": {
+          if (!this.aiGenerator) throw new Error("AI is not available");
+          result = await this.aiGenerator(args);
           break;
         }
 
