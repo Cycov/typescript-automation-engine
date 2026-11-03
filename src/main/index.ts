@@ -24,6 +24,7 @@ import { WorkerManager } from "./worker-manager";
 import { FileManager } from "./file-manager";
 import { AISettings, AIConfig, AIOptions, PROVIDER_IDS, ProviderId } from "./ai/config";
 import { ChatAgent, ApprovalDecision } from "./ai/agent";
+import { AIMemory } from "./ai/memory";
 import { listModels } from "./ai/providers";
 import { EFFORT_LEVELS, EffortLevel, ProviderError } from "./ai/types";
 import { TypeChecker } from "./tools/type-check";
@@ -93,6 +94,7 @@ const storage = new Storage(DB_PATH);
 const fileHistory = new FileHistory(storage.database);
 const fileManager = new FileManager(AUTOMATIONS_PATH, syncPath, fileHistory);
 const aiSettings = new AISettings(storage, aiConfigFromOptions);
+const aiMemory = new AIMemory(storage);
 const typeChecker = new TypeChecker(AUTOMATIONS_PATH);
 
 const haClient = new HAClient({
@@ -297,6 +299,7 @@ const toolContext: ToolContext = {
   typeChecker,
   testManager,
   fileHistory,
+  memory: aiMemory,
   changeSource: "editor",
   getSkillMarkdown: () => skillMarkdown,
   notifyFileChanged: (relativePath, content) => {
@@ -306,7 +309,8 @@ const toolContext: ToolContext = {
   notifyTestsChanged: broadcastTests,
 };
 
-const chatAgent = new ChatAgent(aiSettings, { ...toolContext, changeSource: "ai-chat" }, logger, storage);
+const chatAgent = new ChatAgent(aiSettings, { ...toolContext, changeSource: "ai-chat" }, logger, storage, aiMemory);
+aiMemory.onChange(() => broadcast({ type: "ai_memory", data: aiMemory.state() }));
 
 workerManager.onReloaded(() => broadcast({ type: "reload_ack", success: true }));
 
@@ -800,6 +804,35 @@ wss.on("connection", (ws) => {
 
         case "ai_get_config":
           sendJson({ type: "ai_config", data: aiSettings.info() });
+          break;
+
+        // ─── AI memory ──────────────────────────────────────
+
+        case "ai_memory_get":
+          sendJson({ type: "ai_memory", data: aiMemory.state() });
+          break;
+
+        case "ai_memory_add":
+        case "ai_memory_update":
+        case "ai_memory_delete":
+          try {
+            if (msg.type === "ai_memory_add") aiMemory.add(String(msg.text ?? ""), "user");
+            else if (msg.type === "ai_memory_update") aiMemory.update(Number(msg.id), String(msg.text ?? ""), "user");
+            else aiMemory.delete(Number(msg.id));
+          } catch (err: any) {
+            sendJson({ type: "ai_memory_error", message: err.message, id: msg.id ?? null });
+            sendJson({ type: "ai_memory", data: aiMemory.state() });
+          }
+          break;
+
+        case "ai_memory_settings":
+          aiMemory.updateSettings(msg.settings || {});
+          break;
+
+        case "ai_chats_delete_all":
+          chatAgent.deleteAllChats();
+          logger.log("info", "ai", "All saved chats deleted");
+          aiMemory.notifyChanged();
           break;
 
         case "ai_set_config":

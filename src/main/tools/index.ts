@@ -13,6 +13,7 @@ import { unifiedDiff } from "./diff";
 import { EntityCatalog, buildEntityCatalog, editDistance } from "./entity-check";
 import { TestManager, testScenarioSchema } from "../test-manager";
 import { ChangeSource, FileHistory } from "../file-history";
+import { AIMemory, MEMORY_NOTE_MAX_CHARS } from "../ai/memory";
 import { AutomationInfo, HAEntityState, TraceInfo } from "../../shared/messages";
 import { TestResult, TestScenario } from "../../shared/tests";
 
@@ -45,6 +46,7 @@ export interface ToolContext {
   typeChecker: TypeChecker;
   testManager: TestManager;
   fileHistory: FileHistory;
+  memory: AIMemory;
   /** Who is changing files, for the file history. */
   changeSource: ChangeSource;
   getSkillMarkdown: () => string;
@@ -71,6 +73,8 @@ export interface TaeTool {
   input: z.ZodObject<any>;
   /** Changes files, automations or devices — the in-app chat asks before running it. */
   mutating: boolean;
+  /** Mutating, but the in-app chat runs it without asking (it still shows in the chat). */
+  noApproval?: boolean;
   destructive?: boolean;
   /** Only offered over MCP (the in-app chat already has it in its system prompt). */
   mcpOnly?: boolean;
@@ -162,6 +166,10 @@ function applyEdit(content: string, oldString: string, newString: string, replac
     fail(`old_string appears ${occurrences} times in ${label}; add surrounding lines to make it unique, or set replace_all`);
   }
   return replaceAll ? content.split(oldString).join(newString) : content.replace(oldString, () => newString);
+}
+
+function assertMemoryWritable(ctx: ToolContext): void {
+  if (!ctx.memory.settings().aiCanWrite) fail("The user turned off saving memory notes. Suggest the note instead; they can add it under 🧠 Memory.");
 }
 
 // ─── Entity search ────────────────────────────────────────────
@@ -752,6 +760,59 @@ const tools: TaeTool[] = [
       ctx.notifyFileChanged(relativePath, undefined);
       return { text: `Deleted ${relativePath}.` };
     },
+  },
+  {
+    name: "remember",
+    title: "Save a memory note",
+    description:
+      "Keep a short fact for later chats: what the user calls things, how rooms and devices are used, preferences, conventions, decisions. " +
+      "One fact per note, with entity ids where they apply. Not for secrets, passing states or things the code already says.",
+    input: z.object({ text: z.string().max(MEMORY_NOTE_MAX_CHARS).describe("The fact, e.g. 'Sink light = light.shellyprodm2pm_ac151879bde4_light_1 (the mirror LED)'") }),
+    mutating: true,
+    noApproval: true,
+    run: async (input, ctx) => {
+      assertMemoryWritable(ctx);
+      const note = ctx.memory.add(input.text, "ai");
+      ctx.logger.log("info", "ai", `Remembered: ${note.text}`);
+      return { text: `Saved note ${note.id}.` };
+    },
+  },
+  {
+    name: "update_memory",
+    title: "Change a memory note",
+    description: "Replace the text of a memory note (ids are shown in the Memory section of your instructions, or by get_memory).",
+    input: z.object({ id: z.number().int(), text: z.string().max(MEMORY_NOTE_MAX_CHARS) }),
+    mutating: true,
+    noApproval: true,
+    run: async (input, ctx) => {
+      assertMemoryWritable(ctx);
+      const note = ctx.memory.update(input.id, input.text, "ai");
+      ctx.logger.log("info", "ai", `Memory note ${note.id} changed: ${note.text}`);
+      return { text: `Updated note ${note.id}.` };
+    },
+  },
+  {
+    name: "forget",
+    title: "Delete a memory note",
+    description: "Remove a memory note that is wrong or no longer true.",
+    input: z.object({ id: z.number().int() }),
+    mutating: true,
+    noApproval: true,
+    run: async (input, ctx) => {
+      assertMemoryWritable(ctx);
+      const note = ctx.memory.delete(input.id);
+      ctx.logger.log("info", "ai", `Memory note ${note.id} removed: ${note.text}`);
+      return { text: `Removed note ${note.id}.` };
+    },
+  },
+  {
+    name: "get_memory",
+    title: "Read memory notes",
+    description: "Notes kept across chats about this home: the user's terms for rooms and devices, how they are used, preferences. Read them before working on automations.",
+    input: z.object({}),
+    mutating: false,
+    mcpOnly: true,
+    run: async (_input, ctx) => ({ text: ctx.memory.promptBlock() }),
   },
   {
     name: "save_test",

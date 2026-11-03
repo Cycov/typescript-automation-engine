@@ -18,6 +18,7 @@ const JSONRPC_SERVER_ERROR = -32000;
 
 const INSTRUCTIONS = `Tools for TAE (TypeScript Automation Engine), a Home Assistant add-on that runs automations written in TypeScript.
 - Read get_api_reference before writing automation code. TAE loads only index.ts and calls its exported onInit().
+- get_memory has notes about this home (the user's names for rooms and devices, preferences); read it first and keep it current with remember / update_memory / forget.
 - Use search_entities / get_entity for entity ids and attributes and list_services for service fields; never guess ids.
 - Edit with read_file + edit_file (or write_file), then type_check, then reload_automations, then check list_automations and get_logs.
 - call_service controls real devices: only use it when the user asks.`;

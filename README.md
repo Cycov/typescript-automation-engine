@@ -652,7 +652,9 @@ The AI has tools instead of a fixed context dump. It can:
 
 Anything that changes something (file edits, reloads, starting/stopping, service calls, saving tests) shows a preview - a diff for file edits - and waits for **Allow** / **Deny**. **Always allow** skips the question for that tool for the rest of the chat. Running tests needs no approval, since they never touch devices. Each message also tells the AI which file is open, any unsaved editor content, and your selection.
 
-Chats are saved in TAE, so they survive restarts and updates (kept 14 days, last 50 chats). Each message shows its time, and **Export** downloads the chat as Markdown, including tool calls and their results.
+Chats are saved in TAE, so they survive restarts and updates (by default 14 days, last 50 chats; change it under 🧠). Each message shows its time, and **Export** downloads the chat as Markdown, including tool calls and their results.
+
+**🧠 Memory** holds short notes the AI keeps across chats: what you call things ("sink light" is `light.…_light_1`), how rooms and devices are used, your preferences. The AI saves notes on its own when it learns something worth keeping (it says so in the chat), and fixes or removes them when they turn out wrong. In the panel you can add, edit and delete notes, or turn off the AI's writing. Every note goes into every chat (8000 characters in all), and MCP clients such as Claude Code read them with `get_memory`.
 
 Type **@** to mention a file or an entity: its content or current state goes with the message. For Claude models, each reply shows an estimated cost and the chat's running total (hover the badge for details).
 
@@ -764,6 +766,11 @@ Snippet files are loaded automatically when TAE starts. After editing a `.snippe
 | Terminal command returns string error | Make sure to quote string arguments: `callService('light', 'turn_on', {entity_id: 'light.x'})` |
 
 ## Changelog
+
+### 1.9.3
+
+- **Feature**: **AI memory** (🧠 in the AI chat header): short notes the AI keeps across chats, such as what you call things ("sink light" = which entity), how rooms and devices are used, and preferences. The AI saves, changes and removes notes on its own (`remember`, `update_memory`, `forget`; no approval needed, each one shows in the chat), and you can add, edit and delete them in the panel or turn AI writing off. Notes go into every chat; MCP clients read them with `get_memory`
+- **Feature**: the same panel sets how long chats are saved and how many, shows how many are saved, and can delete them all
 
 ### 1.9.2
 

@@ -1,6 +1,6 @@
 name: "TypeScript Automation Engine"
 description: "Write and run Home Assistant automations in TypeScript with a managed runtime"
-version: "1.9.2"
+version: "1.9.3"
 slug: "typescript_automation_engine"
 url: "https://github.com/Cycov/typescript-automation-engine"
 arch:

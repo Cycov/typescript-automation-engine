@@ -906,6 +906,30 @@
       color: var(--text-dim);
       margin-bottom: 3px;
     }
+    .dialog.memory-dialog { width: min(720px, 94vw); max-width: none; max-height: 88vh; display: flex; flex-direction: column; }
+    .memory-scroll { overflow-y: auto; min-height: 0; flex: 1; margin: 0 -4px; padding: 0 4px; }
+    .memory-section { margin: 14px 0 6px; color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; display: flex; align-items: center; gap: 8px; }
+    .memory-section .memory-usage { margin-left: auto; text-transform: none; letter-spacing: 0; }
+    .memory-usage.full { color: var(--yellow); }
+    .memory-note { display: flex; gap: 8px; align-items: flex-start; padding: 4px 0; border-bottom: 1px solid var(--bg-tertiary); }
+    .dialog .memory-note textarea, .dialog .memory-new textarea {
+      flex: 1; min-height: 0; height: auto; resize: vertical; background: var(--bg-input); color: var(--text); border: 1px solid transparent;
+      border-radius: 4px; padding: 4px 8px; font-family: inherit; font-size: 12px; line-height: 1.45; outline: none;
+    }
+    .dialog .memory-note textarea:hover { border-color: var(--border); }
+    .dialog .memory-note textarea:focus, .dialog .memory-new textarea:focus { border-color: var(--accent); }
+    .memory-meta { width: 92px; flex-shrink: 0; font-size: 10px; color: var(--text-dim); line-height: 1.4; padding-top: 4px; }
+    .memory-meta .memory-source { font-weight: 600; }
+    .memory-meta .memory-source.ai { color: var(--purple); }
+    .memory-meta .memory-source.user { color: var(--accent); }
+    .memory-empty { color: var(--text-dim); font-size: 12px; padding: 8px 0; line-height: 1.6; }
+    .memory-new { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; }
+    .dialog .memory-new textarea { border-color: var(--border); }
+    .memory-error { color: var(--red); font-size: 11px; min-height: 14px; margin-top: 4px; }
+    .memory-chats { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; font-size: 12px; color: var(--text-dim); }
+    .memory-chats label { display: flex; align-items: center; gap: 6px; }
+    .memory-chats input[type="number"] { width: 64px; background: var(--bg-input); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px; font-family: inherit; font-size: 12px; }
+    .memory-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text); }
     .ai-msg-time { text-transform: none; letter-spacing: 0; margin-left: 6px; opacity: 0.75; }
     #aiContextInfo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
     .ai-msg-error {
@@ -1572,6 +1596,7 @@
         <h2>🤖 AI Chat</h2>
         <span class="ai-context-label"><span class="ai-status-dot" id="aiStatusDot"></span> <span id="aiStatusLabel">Not configured</span></span>
         <button class="btn" onclick="showAiSettingsDialog()" title="AI Settings">⚙</button>
+        <button class="btn" onclick="showAiMemoryDialog()" title="AI memory: notes the AI keeps across chats, and saved-chat settings">🧠</button>
         <button class="btn" onclick="toggleAiHistory()" id="aiHistoryBtn" title="Past chats">History</button>
         <button class="btn" onclick="exportAiChat()" title="Download this chat as Markdown (messages, tool calls and results, with times)">Export</button>
         <button class="btn" onclick="clearAiChat()" title="New chat">New chat</button>
@@ -1835,6 +1860,33 @@ supported_features: 40"></textarea>
   </div>
 
   <!-- File history dialog -->
+  <div class="dialog-overlay" id="aiMemoryDialog" onclick="if (event.target === this) closeAiMemoryDialog()">
+    <div class="dialog memory-dialog">
+      <h3>🧠 AI Memory</h3>
+      <p style="margin-bottom: 8px;">Short notes the AI keeps across chats: what you call things, how rooms and devices are used, your preferences. Every note goes into every chat, for the in-app AI and for MCP clients like Claude Code. Edit a note in place; it saves when you leave the field.</p>
+      <label class="memory-toggle"><input type="checkbox" id="aiMemoryAiCanWrite" onchange="saveAiMemorySettings()"> Let the AI save and change notes on its own (each one shows in the chat)</label>
+      <div class="memory-scroll">
+        <div class="memory-section">Notes <span class="memory-usage" id="aiMemoryUsage"></span></div>
+        <div id="aiMemoryNotes"></div>
+        <div class="memory-new">
+          <textarea id="aiMemoryNewText" rows="2" placeholder="Add a note, e.g. &quot;Sink light&quot; = light.shellyprodm2pm_ac151879bde4_light_1 (mirror LED). Main bathroom light is manual." onkeydown="if (event.key === 'Enter' &amp;&amp; (event.ctrlKey || event.metaKey)) { event.preventDefault(); addAiMemoryNote(); }"></textarea>
+          <button class="btn btn-accent" onclick="addAiMemoryNote()" title="Add (Ctrl+Enter)">Add</button>
+        </div>
+        <div class="memory-error" id="aiMemoryError"></div>
+        <div class="memory-section">Saved chats</div>
+        <div class="memory-chats">
+          <label>Keep chats for <input type="number" id="aiMemoryRetentionDays" min="1" max="365" onchange="saveAiMemorySettings()"> days</label>
+          <label>Keep at most <input type="number" id="aiMemoryMaxChats" min="1" max="500" onchange="saveAiMemorySettings()"> chats</label>
+          <span id="aiMemoryChatStats"></span>
+          <button class="btn" onclick="deleteAllSavedChats()">Delete all saved chats</button>
+        </div>
+      </div>
+      <div class="dialog-actions" style="margin-top: 14px;">
+        <button class="btn" onclick="closeAiMemoryDialog()">Close</button>
+      </div>
+    </div>
+  </div>
+
   <div class="dialog-overlay" id="historyDialog" onclick="if (event.target === this) closeHistoryDialog()">
     <div class="dialog history-dialog">
       <div class="history-header">
@@ -2047,6 +2099,12 @@ supported_features: 40"></textarea>
           break;
         case 'storage_data':
           renderStorageViewer(msg.persistent, msg.temp);
+          break;
+        case 'ai_memory':
+          handleAiMemory(msg.data);
+          break;
+        case 'ai_memory_error':
+          showAiMemoryError(msg.message);
           break;
         case 'ai_config':
           aiConfig = msg.data || aiConfig;
@@ -2485,6 +2543,7 @@ supported_features: 40"></textarea>
         if (document.getElementById('storageEditDialog').classList.contains('active')) { closeStorageEditDialog(); return; }
         if (document.getElementById('aiSettingsDialog').classList.contains('active')) { closeAiSettingsDialog(); return; }
         if (document.getElementById('historyDialog').classList.contains('active')) { closeHistoryDialog(); return; }
+        if (document.getElementById('aiMemoryDialog').classList.contains('active')) { closeAiMemoryDialog(); return; }
       }
       // Ctrl+S inside the test editor saves the test
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 's' && document.activeElement && document.activeElement.closest('#testsArea')) {
@@ -5340,6 +5399,124 @@ supported_features: 40"></textarea>
       }
       document.getElementById('aiModelList').innerHTML = (msg.models || []).map(model => '<option value="' + escapeHtml(model) + '">').join('');
       hint.textContent = (msg.models || []).length + ' models available: click a model field to pick one.';
+    }
+
+    // ─── AI memory ──────────────────────────────────
+    const BYTES_PER_KB = 1024;
+    let aiMemoryState = null;
+    let aiMemoryRenderPending = false;
+
+    function showAiMemoryDialog() {
+      document.getElementById('aiMemoryDialog').classList.add('active');
+      showAiMemoryError('');
+      renderAiMemory();
+      send({ type: 'ai_memory_get' });
+    }
+
+    function closeAiMemoryDialog() {
+      const active = document.activeElement;
+      if (active && active.closest && active.closest('#aiMemoryNotes')) active.blur(); //< save an edit in progress
+      document.getElementById('aiMemoryDialog').classList.remove('active');
+    }
+
+    function aiMemoryDialogOpen() {
+      return document.getElementById('aiMemoryDialog').classList.contains('active');
+    }
+
+    function handleAiMemory(state) {
+      aiMemoryState = state;
+      if (!aiMemoryDialogOpen()) return;
+      const active = document.activeElement;
+      if (active && active.closest && active.closest('#aiMemoryDialog') && (active.tagName === 'TEXTAREA' || active.type === 'number')) {
+        aiMemoryRenderPending = true; //< don't replace what is being typed
+        return;
+      }
+      renderAiMemory();
+    }
+
+    function showAiMemoryError(message) {
+      const element = document.getElementById('aiMemoryError');
+      if (element) element.textContent = message || '';
+    }
+
+    function renderAiMemory() {
+      aiMemoryRenderPending = false;
+      const state = aiMemoryState;
+      const list = document.getElementById('aiMemoryNotes');
+      if (!state) {
+        list.innerHTML = '<div class="memory-empty">Loading…</div>';
+        return;
+      }
+      document.getElementById('aiMemoryAiCanWrite').checked = state.settings.aiCanWrite;
+      document.getElementById('aiMemoryRetentionDays').value = state.settings.chatRetentionDays;
+      document.getElementById('aiMemoryMaxChats').value = state.settings.maxSavedChats;
+      const kilobytes = Math.max(1, Math.round(state.savedChats.bytes / BYTES_PER_KB));
+      document.getElementById('aiMemoryChatStats').textContent = state.savedChats.count
+        ? state.savedChats.count + ' saved (' + kilobytes + ' KB)'
+        : 'none saved';
+      const usage = document.getElementById('aiMemoryUsage');
+      usage.textContent = state.totalChars + ' / ' + state.maxChars + ' characters';
+      usage.className = 'memory-usage' + (state.totalChars > state.maxChars * 0.9 ? ' full' : '');
+      document.getElementById('aiMemoryNewText').maxLength = state.noteMaxChars;
+      if (state.notes.length === 0) {
+        list.innerHTML = '<div class="memory-empty">No notes yet. Add one below, or tell the AI something like "remember that the sink light is the mirror LED".</div>';
+        return;
+      }
+      list.innerHTML = state.notes.map(note =>
+        '<div class="memory-note" data-id="' + note.id + '">' +
+          '<textarea rows="' + Math.max(1, Math.ceil(note.text.length / 90)) + '" maxlength="' + state.noteMaxChars + '" data-original="' + escapeAttr(note.text) + '" ' +
+            'onblur="commitAiMemoryNote(this)" onkeydown="if (event.key === \'Enter\' && !event.shiftKey) { event.preventDefault(); this.blur(); } else if (event.key === \'Escape\') { event.stopPropagation(); this.value = this.dataset.original; this.blur(); }">' +
+            escapeHtml(note.text) + '</textarea>' +
+          '<div class="memory-meta"><span class="memory-source ' + note.source + '">' + (note.source === 'ai' ? 'AI' : 'You') + '</span><br>' +
+            escapeHtml(new Date(note.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })) + '</div>' +
+          '<button class="row-btn danger" title="Delete this note" onclick="deleteAiMemoryNote(' + note.id + ')">✕</button>' +
+        '</div>'
+      ).join('');
+    }
+
+    function commitAiMemoryNote(textarea) {
+      const id = Number(textarea.closest('.memory-note').dataset.id);
+      const text = textarea.value.trim();
+      if (text && text !== textarea.dataset.original) {
+        showAiMemoryError('');
+        send({ type: 'ai_memory_update', id, text });
+        textarea.dataset.original = text;
+      } else if (!text) {
+        textarea.value = textarea.dataset.original; //< deleting is the ✕ button
+      }
+      if (aiMemoryRenderPending) setTimeout(() => { if (!document.activeElement || !document.activeElement.closest('#aiMemoryNotes')) renderAiMemory(); }, 0);
+    }
+
+    function addAiMemoryNote() {
+      const input = document.getElementById('aiMemoryNewText');
+      const text = input.value.trim();
+      if (!text) return;
+      showAiMemoryError('');
+      send({ type: 'ai_memory_add', text });
+      input.value = '';
+      input.blur();
+    }
+
+    function deleteAiMemoryNote(id) {
+      showAiMemoryError('');
+      send({ type: 'ai_memory_delete', id });
+    }
+
+    function saveAiMemorySettings() {
+      send({
+        type: 'ai_memory_settings',
+        settings: {
+          aiCanWrite: document.getElementById('aiMemoryAiCanWrite').checked,
+          chatRetentionDays: Number(document.getElementById('aiMemoryRetentionDays').value),
+          maxSavedChats: Number(document.getElementById('aiMemoryMaxChats').value),
+        },
+      });
+      document.activeElement && document.activeElement.blur();
+    }
+
+    function deleteAllSavedChats() {
+      if (!confirm('Delete every saved chat? The AI forgets those conversations; chats open in a browser start over with their next message. Memory notes stay.')) return;
+      send({ type: 'ai_chats_delete_all' });
     }
 
     function closeAiSettingsDialog() {

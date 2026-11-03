@@ -109,6 +109,15 @@ export class Storage {
     this.db.prepare("DELETE FROM chat_sessions WHERE id = ?").run(id);
   }
 
+  deleteAllChatSessions(): void {
+    this.db.prepare("DELETE FROM chat_sessions").run();
+  }
+
+  chatSessionStats(): { count: number; bytes: number } {
+    const row = this.db.prepare("SELECT COUNT(*) AS count, COALESCE(SUM(LENGTH(data)), 0) AS bytes FROM chat_sessions").get() as { count: number; bytes: number };
+    return { count: row.count, bytes: row.bytes };
+  }
+
   /** Drop chats older than maxAgeMs, and the oldest beyond keepCount. */
   pruneChatSessions(maxAgeMs: number, keepCount: number): void {
     this.db.prepare("DELETE FROM chat_sessions WHERE updated_at < ?").run(Date.now() - maxAgeMs);

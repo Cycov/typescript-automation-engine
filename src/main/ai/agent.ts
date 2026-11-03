@@ -8,6 +8,7 @@ import { ToolContext, getChatTools, findTool, previewTool, runTool, toolJsonSche
 import { AISettings } from "./config";
 import { createChatProvider, createCompletionProvider } from "./providers";
 import { turnCostUsd } from "./pricing";
+import { AIMemory } from "./memory";
 import {
   CompletionRequest,
   EditorContext,
@@ -22,9 +23,7 @@ import { EffortLevel, ProviderError, StopReason, ToolResultItem, ToolSpec, TurnR
 
 const MAX_TOOL_ROUNDS = 30;
 const SESSION_IDLE_MS = 12 * 60 * 60 * 1000;
-const MAX_SESSIONS = 20; //< kept in memory; all chats are also saved
-const SAVED_CHAT_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
-const SAVED_CHAT_MAX_COUNT = 50;
+const MAX_SESSIONS = 20; //< kept in memory; all chats are also saved (limits in AIMemory settings)
 const TOOL_OUTPUT_UI_MAX_CHARS = 6000;
 const INVALID_JSON_KEY = "INVALID_JSON";
 const MAX_MENTIONS = 10;
@@ -46,7 +45,7 @@ export interface ChatSessionStore {
   getChatSession(id: string): any | undefined;
   saveChatSession(id: string, data: any): void;
   deleteChatSession(id: string): void;
-  pruneChatSessions(maxAgeMs: number, keepCount: number): void;
+  deleteAllChatSessions(): void;
 }
 
 export interface ChatSendOptions {
@@ -89,17 +88,34 @@ export class ChatAgent {
   private logger: Logger;
   private sessions = new Map<string, ChatSession>();
   private store: ChatSessionStore;
+  private memory: AIMemory;
 
-  constructor(settings: AISettings, ctx: ToolContext, logger: Logger, store: ChatSessionStore) {
+  constructor(settings: AISettings, ctx: ToolContext, logger: Logger, store: ChatSessionStore, memory: AIMemory) {
     this.settings = settings;
     this.ctx = ctx;
     this.logger = logger;
     this.store = store;
+    this.memory = memory;
+    this.pruneSaved();
+  }
+
+  /** Forget every saved chat (open chats start over with their next message). */
+  deleteAllChats(): void {
+    for (const session of this.sessions.values()) session.running?.abort();
+    this.sessions.clear();
+    this.store.deleteAllChatSessions();
+  }
+
+  private pruneSaved(): void {
     try {
-      store.pruneChatSessions(SAVED_CHAT_MAX_AGE_MS, SAVED_CHAT_MAX_COUNT);
+      this.memory.pruneChats();
     } catch (err: any) {
-      logger.log("warn", "ai", `Could not prune saved chats: ${err?.message ?? err}`);
+      this.logger.log("warn", "ai", `Could not prune saved chats: ${err?.message ?? err}`);
     }
+  }
+
+  private systemPrompt(): string {
+    return buildChatSystemPrompt(this.ctx.getSkillMarkdown(), this.memory.promptBlock());
   }
 
   /** Handle one user message: run model turns and tools until the model is done. */
@@ -135,6 +151,7 @@ export class ChatAgent {
       return;
     }
 
+    session.system = this.systemPrompt(); //< same text unless memory changed, so the prompt cache holds
     const controller = new AbortController();
     session.running = controller;
     session.lastUsed = Date.now();
@@ -225,6 +242,8 @@ export class ChatAgent {
     } catch (err: any) {
       this.logger.log("warn", "ai", `Could not save the chat: ${err?.message ?? err}`);
     }
+    this.pruneSaved();
+    this.memory.notifyChanged(); //< saved-chat count in the memory panel
   }
 
   /** Files and entities the user wrote as @name; unknown names are left as plain text. */
@@ -276,7 +295,7 @@ export class ChatAgent {
       id: sessionId,
       providerKey,
       effort,
-      system: buildChatSystemPrompt(this.ctx.getSkillMarkdown()),
+      system: this.systemPrompt(),
       history: [],
       lastUsed: Date.now(),
       running: null,
@@ -340,7 +359,7 @@ export class ChatAgent {
         continue;
       }
 
-      if (tool.mutating && !session.alwaysAllow.has(tool.name)) {
+      if (tool.mutating && !tool.noApproval && !session.alwaysAllow.has(tool.name)) {
         const preview = await previewTool(tool, parsed.data, this.ctx);
         if ("text" in preview) {
           finish(call.id, call.name, preview.text, true);
