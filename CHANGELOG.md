@@ -3,6 +3,7 @@
 ## 1.11.0
 
 - **Feature**: AI settings have an **Automations model** for `this.ai.generate`: the same as inline completions (default), the same as the chat, or a custom model. The dialog shows which model automations end up using
+- **Change**: the model fields in AI settings suggest models in TAE's own dropdown (like the Tests panel) instead of the browser's: the provider's defaults right away, every model after **Load models**, filtered as you type
 
 ## 1.10.0
 

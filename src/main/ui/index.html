@@ -1813,15 +1813,14 @@ supported_features: 40"></textarea>
       <div style="margin-bottom: 12px;">
         <label class="ai-settings-label">Chat model</label>
         <div class="ai-settings-row">
-          <input type="text" id="aiSettModel" list="aiModelList" />
+          <input type="text" id="aiSettModel" data-suggest="model" autocomplete="off" oninput="updateAiAutomationModel()" />
           <button class="btn" onclick="loadAiModels()" id="aiLoadModelsBtn" title="Ask the provider which models this key can use">Load models</button>
         </div>
-        <datalist id="aiModelList"></datalist>
         <div class="ai-settings-hint" id="aiModelsHint">Leave empty to use the default shown.</div>
       </div>
       <div style="margin-bottom: 12px;">
         <label class="ai-settings-label">Inline completion model <span style="font-size: 10px;">(a fast, cheap model)</span></label>
-        <input type="text" id="aiSettCompletionModel" list="aiModelList" />
+        <input type="text" id="aiSettCompletionModel" data-suggest="model" autocomplete="off" oninput="updateAiAutomationModel()" />
       </div>
       <div class="ai-settings-row" style="margin-bottom: 4px;">
         <div style="flex: 1;">
@@ -1856,7 +1855,7 @@ supported_features: 40"></textarea>
             <option value="chat">Same as chat</option>
             <option value="custom">Custom</option>
           </select>
-          <input type="text" id="aiSettAutomationModel" list="aiModelList" oninput="updateAiAutomationModel()" />
+          <input type="text" id="aiSettAutomationModel" data-suggest="model" autocomplete="off" oninput="updateAiAutomationModel()" />
         </div>
         <div class="ai-settings-hint" id="aiAutomationModelHint"></div>
       </div>
@@ -5402,7 +5401,7 @@ supported_features: 40"></textarea>
       document.getElementById('aiSettCompletionEffort').value = aiConfig.completionEffort || '';
       document.getElementById('aiSettAutomationSource').value = aiConfig.automationModelSource || 'completion';
       document.getElementById('aiSettAutomationModel').value = aiConfig.automationModel || '';
-      document.getElementById('aiModelList').innerHTML = '';
+      aiModelOptions = [];
       document.getElementById('aiModelsHint').textContent = 'Leave empty to use the default shown.';
       const status = document.getElementById('aiSettStatus');
       status.textContent = aiConfig.configured ? '✓ Configured' : '✗ Not configured';
@@ -5444,12 +5443,28 @@ supported_features: 40"></textarea>
       const chat = document.getElementById('aiSettModel').value.trim() || defaults.chat;
       const completion = document.getElementById('aiSettCompletionModel').value.trim() || defaults.completion || chat;
       input.style.display = source === 'custom' ? '' : 'none';
-      input.placeholder = 'Empty = the inline completion model (' + (completion || 'none') + ')';
+      input.placeholder = 'Empty = ' + (completion || 'completion model');
       const model = source === 'chat' ? chat : source === 'custom' ? (input.value.trim() || completion) : completion;
       const effort = source === 'chat' ? 'chat effort' : 'inline completion effort';
       document.getElementById('aiAutomationModelHint').textContent = model
         ? 'Automations use ' + model + ' with the ' + effort + '. A cheap, fast model is plenty for announcements and notification texts.'
         : 'No model yet: set a chat model first.';
+    }
+
+    let aiModelOptions = []; //< from "Load models"; until then the provider's defaults are suggested
+
+    /** Model field suggestions: loaded models, or the provider's defaults. */
+    function aiModelSuggestions(query) {
+      const provider = document.getElementById('aiSettProvider').value;
+      const defaults = (aiConfig.defaults && aiConfig.defaults[provider]) || { chat: '', completion: '' };
+      const roles = {};
+      if (defaults.chat) roles[defaults.chat] = 'default for chat';
+      if (defaults.completion) roles[defaults.completion] = (roles[defaults.completion] ? roles[defaults.completion] + ', ' : 'default for ') + 'completions';
+      const models = aiModelOptions.length ? aiModelOptions : Object.keys(roles);
+      return models
+        .filter(model => !query || model.toLowerCase().includes(query))
+        .slice(0, SUGGEST_MAX_ITEMS)
+        .map(model => ({ value: model, name: roles[model] || '', hint: '' }));
     }
 
     function loadAiModels() {
@@ -5466,7 +5481,7 @@ supported_features: 40"></textarea>
         hint.textContent = msg.error;
         return;
       }
-      document.getElementById('aiModelList').innerHTML = (msg.models || []).map(model => '<option value="' + escapeHtml(model) + '">').join('');
+      aiModelOptions = msg.models || [];
       hint.textContent = (msg.models || []).length + ' models available: click a model field to pick one.';
     }
 
@@ -6289,28 +6304,31 @@ supported_features: 40"></textarea>
       popup.className = 'suggest-popup';
       popup.id = 'testSuggest';
       document.body.appendChild(popup);
-      const editor = document.getElementById('testsEditor');
-      if (!editor) return;
-      editor.addEventListener('focusin', (e) => {
-        if (e.target.dataset && e.target.dataset.suggest) openTestSuggest(e.target);
-      });
-      editor.addEventListener('input', (e) => {
-        if (e.target.dataset && e.target.dataset.suggest) openTestSuggest(e.target);
-      });
-      editor.addEventListener('focusout', (e) => {
-        if (e.target === suggestInput) closeTestSuggest();
-      });
-      editor.addEventListener('keydown', handleTestSuggestKey, true);
       const follow = () => {
         if (suggestInput && popup.classList.contains('active')) openTestSuggest(suggestInput);
       };
-      editor.addEventListener('scroll', follow);
       window.addEventListener('resize', follow);
+      const aiDialog = document.getElementById('aiSettingsDialog');
+      for (const container of [document.getElementById('testsEditor'), aiDialog && aiDialog.querySelector('.dialog')]) {
+        if (!container) continue;
+        container.addEventListener('focusin', (e) => {
+          if (e.target.dataset && e.target.dataset.suggest) openTestSuggest(e.target);
+        });
+        container.addEventListener('input', (e) => {
+          if (e.target.dataset && e.target.dataset.suggest) openTestSuggest(e.target);
+        });
+        container.addEventListener('focusout', (e) => {
+          if (e.target === suggestInput) closeTestSuggest();
+        });
+        container.addEventListener('keydown', handleTestSuggestKey, true);
+        container.addEventListener('scroll', follow);
+      }
     }
 
     function suggestionsFor(input) {
       const query = input.value.trim().toLowerCase();
       const kind = input.dataset.suggest;
+      if (kind === 'model') return aiModelSuggestions(query);
       if (kind === 'entity') {
         const starts = [], contains = [];
         for (const entity of entityIndex.list) {
