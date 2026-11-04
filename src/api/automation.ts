@@ -20,9 +20,7 @@ import {
   AutomationStorage,
   AutomationAI,
   CallServiceOptions,
-  PublishedBinarySensor,
-  PublishedEntityOptions,
-  PublishedSensor,
+  AutomationPublish,
   PersistentStorage,
   TempStorage,
   LogLevel,
@@ -78,6 +76,18 @@ export abstract class Automation {
   public readonly ai: AutomationAI;
 
   /**
+   * Entities this automation publishes to Home Assistant, created on the first `set()`.
+   * They appear under the "TAE" device as `sensor.<objectId>` / `binary_sensor.<objectId>` and survive HA
+   * restarts (MQTT, retained). Needs the Mosquitto broker app; `set()` rejects with an explanation without it.
+   *
+   * @example
+   * const forecast = this.publish.sensor('meteoblue_forecast', { name: 'Meteoblue forecast', unit: '°C' });
+   * await forecast.set(12.4, { hourly, daily });
+   * await this.publish.binarySensor('rain_soon').set(true);
+   */
+  public readonly publish: AutomationPublish;
+
+  /**
    * Create a new automation instance.
    *
    * @param id - Optional custom ID. If omitted, an ID is auto-generated from the class name.
@@ -117,32 +127,16 @@ export abstract class Automation {
     };
     this.storage = { persistent, temp };
     this.ai = { generate: (prompt, options) => getManager().aiGenerate(this, prompt, options) };
-  }
-
-  // ─── Entities published to Home Assistant ───────────────────
-
-  /**
-   * A sensor this automation publishes to Home Assistant, created on the first `set()`.
-   * It appears under the "TAE" device as `sensor.<objectId>` and survives HA restarts (MQTT, retained).
-   * Needs the Mosquitto broker app; `set()` rejects with an explanation when MQTT isn't available.
-   *
-   * @example
-   * const forecast = this.sensor('meteoblue_forecast', { name: 'Meteoblue forecast', unit: '°C' });
-   * await forecast.set(12.4, { hourly, daily });
-   */
-  sensor(objectId: string, options: PublishedEntityOptions = {}): PublishedSensor {
-    return {
-      set: (state, attributes) =>
-        getManager().publishEntity(this, "sensor", objectId, options, state === null ? "None" : String(state), attributes),
-      remove: () => getManager().removeEntity(this, "sensor", objectId),
-    };
-  }
-
-  /** A binary sensor (on/off) this automation publishes, as `binary_sensor.<objectId>`. See `sensor()`. */
-  binarySensor(objectId: string, options: PublishedEntityOptions = {}): PublishedBinarySensor {
-    return {
-      set: (on, attributes) => getManager().publishEntity(this, "binary_sensor", objectId, options, on ? "ON" : "OFF", attributes),
-      remove: () => getManager().removeEntity(this, "binary_sensor", objectId),
+    this.publish = {
+      sensor: (objectId, options = {}) => ({
+        set: (state, attributes) =>
+          getManager().publishEntity(this, "sensor", objectId, options, state === null ? "None" : String(state), attributes),
+        remove: () => getManager().removeEntity(this, "sensor", objectId),
+      }),
+      binarySensor: (objectId, options = {}) => ({
+        set: (on, attributes) => getManager().publishEntity(this, "binary_sensor", objectId, options, on ? "ON" : "OFF", attributes),
+        remove: () => getManager().removeEntity(this, "binary_sensor", objectId),
+      }),
     };
   }
 

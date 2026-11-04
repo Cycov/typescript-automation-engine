@@ -109,3 +109,11 @@ export interface PublishedBinarySensor {
   set(on: boolean, attributes?: Record<string, unknown>): Promise<void>;
   remove(): Promise<void>;
 }
+
+/** this.publish: entities this automation publishes to Home Assistant. */
+export interface AutomationPublish {
+  /** A sensor published as `sensor.<objectId>`, created on the first `set()`. */
+  sensor(objectId: string, options?: PublishedEntityOptions): PublishedSensor;
+  /** A binary sensor (on/off) published as `binary_sensor.<objectId>`. */
+  binarySensor(objectId: string, options?: PublishedEntityOptions): PublishedBinarySensor;
+}

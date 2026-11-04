@@ -426,7 +426,7 @@ export class WorkerManager {
     this.aiGenerator = generator;
   }
 
-  /** Where automations' this.sensor()/binarySensor() go; unset when MQTT isn't available. */
+  /** Where automations' this.publish.sensor()/binarySensor() go; unset when MQTT isn't available. */
   setEntityPublisher(publisher: MqttEntities): void {
     this.entityPublisher = publisher;
   }

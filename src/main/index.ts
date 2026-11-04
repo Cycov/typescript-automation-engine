@@ -125,7 +125,7 @@ const automationAI = new AutomationAI(aiSettings, logger);
 workerManager.setAIGenerator((request) => automationAI.generate(request));
 testManager.setAIGenerator((request) => automationAI.generate(request));
 
-// Entities in HA over MQTT: automations' this.sensor()/binarySensor() and TAE's own status and switches
+// Entities in HA over MQTT: automations' this.publish.sensor()/binarySensor() and TAE's own status and switches
 const mqttEntities = new MqttEntities(logger, appVersion);
 
 async function startMqtt(): Promise<void> {

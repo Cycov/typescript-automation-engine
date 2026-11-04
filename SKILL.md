@@ -203,7 +203,7 @@ try {
 
 In tests the AI is not called: `generate` returns a placeholder (`[AI text for: …]`); with live calls on, it uses the real AI.
 
-#### Publishing entities: `this.sensor(objectId, options?)` / `this.binarySensor(objectId, options?)`
+#### Publishing entities: `this.publish.sensor(objectId, options?)` / `this.publish.binarySensor(objectId, options?)`
 Publish your own sensors to Home Assistant (computed values, data fetched from an API). They appear under the
 **TAE** device as `sensor.<objectId>` / `binary_sensor.<objectId>`, survive HA restarts, and can be used in
 dashboards and other automations like any entity. Needs the **Mosquitto broker** app (MQTT); `set()` rejects with an
@@ -218,9 +218,9 @@ explanation when MQTT isn't available. `objectId`: lowercase letters, digits and
 | `stateClass`  | `"measurement"` etc., for long-term statistics (sensors) |
 
 ```typescript
-const forecast = this.sensor('outdoor_feel', { name: 'Feels like', unit: '°C', deviceClass: 'temperature' });
+const forecast = this.publish.sensor('outdoor_feel', { name: 'Feels like', unit: '°C', deviceClass: 'temperature' });
 await forecast.set(8.5, { source: 'meteoblue' });   // state (null = unknown) + optional attributes
-await this.binarySensor('rain_soon', { name: 'Rain soon' }).set(true);
+await this.publish.binarySensor('rain_soon', { name: 'Rain soon' }).set(true);
 await forecast.remove();                              // delete it from HA
 ```
 
@@ -664,6 +664,7 @@ import {
   PublishedEntityOptions,
   PublishedSensor,
   PublishedBinarySensor,
+  AutomationPublish,
   CallServiceOptions,
 } from 'tae';
 ```

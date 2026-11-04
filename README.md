@@ -423,12 +423,12 @@ The **Automations model** in AI settings picks the model: the same as inline com
 
 ### Publishing Entities
 
-`this.sensor(objectId, options?)` and `this.binarySensor(objectId, options?)` publish your own entities to Home Assistant over MQTT, for values an automation computes or fetches (a forecast from an API, a derived "someone home" flag). They show up under the **TAE** device as `sensor.<objectId>` / `binary_sensor.<objectId>`, keep their state across HA restarts, and work in dashboards and other automations like any entity.
+`this.publish.sensor(objectId, options?)` and `this.publish.binarySensor(objectId, options?)` publish your own entities to Home Assistant over MQTT, for values an automation computes or fetches (a forecast from an API, a derived "someone home" flag). They show up under the **TAE** device as `sensor.<objectId>` / `binary_sensor.<objectId>`, keep their state across HA restarts, and work in dashboards and other automations like any entity.
 
 ```typescript
-const forecast = this.sensor('outdoor_feel', { name: 'Feels like', unit: '°C', deviceClass: 'temperature' });
+const forecast = this.publish.sensor('outdoor_feel', { name: 'Feels like', unit: '°C', deviceClass: 'temperature' });
 await forecast.set(8.5, { source: 'meteoblue' });   // state (null = unknown) + optional attributes
-await this.binarySensor('rain_soon', { name: 'Rain soon' }).set(true);
+await this.publish.binarySensor('rain_soon', { name: 'Rain soon' }).set(true);
 ```
 
 Options: `name`, `icon`, `unit`, `deviceClass`, `stateClass`. This needs the **Mosquitto broker** app; TAE finds it on its own. Without it, `set()` rejects and explains what's missing.
@@ -818,9 +818,13 @@ Snippet files are loaded automatically when TAE starts. After editing a `.snippe
 
 ## Changelog
 
+### 1.12.1
+
+- **Change**: publishing entities moved to `this.publish.sensor(...)` / `this.publish.binarySensor(...)`, so it can't collide with a `sensor` field of your own automations
+
 ### 1.12.0
 
-- **Feature**: automations publish their own entities to Home Assistant: `this.sensor(id, options).set(state, attributes)` and `this.binarySensor(...)`, over MQTT discovery (needs the Mosquitto broker app). They appear under a **TAE** device and survive HA restarts
+- **Feature**: automations publish their own entities to Home Assistant: `this.publish.sensor(id, options).set(state, attributes)` and `this.publish.binarySensor(...)`, over MQTT discovery (needs the Mosquitto broker app). They appear under a **TAE** device and survive HA restarts
 - **Feature**: TAE in Home Assistant: `sensor.tae_status` (running, version, automation counts) and a switch per automation that shows whether it runs and starts or stops it
 
 ### 1.11.0

@@ -28,6 +28,7 @@ export {
   PublishedEntityOptions,
   PublishedSensor,
   PublishedBinarySensor,
+  AutomationPublish,
   LogLevel,
 } from "./types";
 

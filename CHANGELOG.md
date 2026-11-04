@@ -1,8 +1,12 @@
 # Changelog
 
+## 1.12.1
+
+- **Change**: publishing entities moved to `this.publish.sensor(...)` / `this.publish.binarySensor(...)`, so it can't collide with a `sensor` field of your own automations
+
 ## 1.12.0
 
-- **Feature**: automations publish their own entities to Home Assistant: `this.sensor(id, options).set(state, attributes)` and `this.binarySensor(...)`, over MQTT discovery (needs the Mosquitto broker app). They appear under a **TAE** device and survive HA restarts
+- **Feature**: automations publish their own entities to Home Assistant: `this.publish.sensor(id, options).set(state, attributes)` and `this.publish.binarySensor(...)`, over MQTT discovery (needs the Mosquitto broker app). They appear under a **TAE** device and survive HA restarts
 - **Feature**: TAE in Home Assistant: `sensor.tae_status` (running, version, automation counts) and a switch per automation that shows whether it runs and starts or stops it
 
 ## 1.11.0
