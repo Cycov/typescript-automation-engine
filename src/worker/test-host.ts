@@ -194,6 +194,11 @@ export class TestHost implements WorkerHost {
         return this.recordServiceCall(args);
       case "aiGenerate":
         return this.aiGenerate(args);
+      case "publishEntity":
+        this.add("info", `${args.component}.${args.objectId} = ${args.state} (not published in tests)`, { automationId: args.automationId, detail: args });
+        return null;
+      case "removeEntity":
+        return null;
       case "getEntityState":
       case "fetchEntityState":
         return this.states.get(args.entityId);

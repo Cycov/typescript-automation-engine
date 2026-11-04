@@ -1,6 +1,6 @@
 {
   "name": "typescript-automation-engine",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "private": true,
   "scripts": {
     "build": "tsc",
@@ -13,6 +13,7 @@
     "@types/node": "^24.19.2",
     "better-sqlite3": "^12.11.1",
     "express": "^5.3.0",
+    "mqtt": "^5.16.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
     "ws": "^8.18.0",

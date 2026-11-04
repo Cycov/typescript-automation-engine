@@ -26,6 +26,8 @@ import { AISettings, AIConfig, AIOptions, AUTOMATION_MODEL_SOURCES, AutomationMo
 import { ChatAgent, ApprovalDecision } from "./ai/agent";
 import { AIMemory } from "./ai/memory";
 import { AutomationAI } from "./ai/automation-ai";
+import { findMqttSettings, MqttEntities } from "./mqtt-entities";
+import { startTaeEntities } from "./tae-entities";
 import { listModels } from "./ai/providers";
 import { EFFORT_LEVELS, EffortLevel, ProviderError } from "./ai/types";
 import { TypeChecker } from "./tools/type-check";
@@ -122,6 +124,20 @@ const testManager = new TestManager(haClient, storage, logger, {
 const automationAI = new AutomationAI(aiSettings, logger);
 workerManager.setAIGenerator((request) => automationAI.generate(request));
 testManager.setAIGenerator((request) => automationAI.generate(request));
+
+// Entities in HA over MQTT: automations' this.sensor()/binarySensor() and TAE's own status and switches
+const mqttEntities = new MqttEntities(logger, appVersion);
+
+async function startMqtt(): Promise<void> {
+  const settings = await findMqttSettings(SUPERVISOR_TOKEN);
+  if (!settings) {
+    logger.log("info", "mqtt", "No MQTT broker (install the Mosquitto broker app to publish entities to HA)");
+    return;
+  }
+  mqttEntities.connect(settings);
+  workerManager.setEntityPublisher(mqttEntities);
+  startTaeEntities(mqttEntities, workerManager, logger, appVersion);
+}
 
 function loadSkillMarkdown(): string {
   // In Docker: /app/SKILL.md; in dev: project root
@@ -1042,6 +1058,7 @@ async function main(): Promise<void> {
     logger.log("info", "main", `Server listening on port ${PORT}${RESTRICT_TO_INGRESS ? " (ingress only)" : ""}`);
   });
   loadMcpHostPort().catch(() => {});
+  startMqtt().catch((err) => logger.log("warn", "mqtt", `MQTT setup failed: ${err?.message ?? err}`));
 
   // Connect to Home Assistant
   try {
@@ -1057,6 +1074,7 @@ async function main(): Promise<void> {
 async function shutdown(signalName: string): Promise<void> {
   logger.log("info", "main", `${signalName} received, shutting down...`);
   await workerManager.terminateWorker("stop");
+  await mqttEntities.disconnect().catch(() => {});
   storage.close();
   server.close();
   mcpServer.close();

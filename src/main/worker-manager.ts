@@ -10,6 +10,7 @@
  */
 
 import { Worker } from "worker_threads";
+import type { MqttEntities } from "./mqtt-entities";
 import * as path from "path";
 import { HAClient } from "./ha-client";
 import { Storage } from "./storage";
@@ -52,6 +53,7 @@ export class WorkerManager {
   private subscriptions = new Map<string, { unsub: () => void; automationId: string }>();
   private automationListeners: ((automations: AutomationInfo[]) => void)[] = [];
   private reloadListeners: (() => void)[] = [];
+  private initListeners: (() => void)[] = [];
   private timelines = new Map<string, AutomationTimeline>();
   private timelineListeners: ((timeline: AutomationTimeline, trace: TraceInfo | null) => void)[] = [];
   private config: WorkerConfig;
@@ -62,6 +64,7 @@ export class WorkerManager {
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
   private restartDelayMs = RESTART_DELAY_MIN_MS;
   private aiGenerator?: AIGenerator;
+  private entityPublisher: MqttEntities | null = null;
   private spawnedAt = 0;
 
   constructor(
@@ -109,6 +112,11 @@ export class WorkerManager {
     for (const listener of this.reloadListeners) {
       try { listener(); } catch {}
     }
+  }
+
+  /** Called each time a worker finished loading index.ts (first start, reloads, restarts). */
+  onInitComplete(listener: () => void): void {
+    this.initListeners.push(listener);
   }
 
   /** Called after every successful reload, whoever triggered it. */
@@ -382,6 +390,9 @@ export class WorkerManager {
           "worker-mgr",
           `Init complete: ${msg.automations.length} automation(s) loaded`
         );
+        for (const listener of this.initListeners) {
+          try { listener(); } catch {}
+        }
         if (this.initResolve) {
           this.initResolve();
           this.initResolve = undefined;
@@ -415,6 +426,11 @@ export class WorkerManager {
     this.aiGenerator = generator;
   }
 
+  /** Where automations' this.sensor()/binarySensor() go; unset when MQTT isn't available. */
+  setEntityPublisher(publisher: MqttEntities): void {
+    this.entityPublisher = publisher;
+  }
+
   private async handleRequest(id: number, method: string, args: any): Promise<void> {
     try {
       let result: any;
@@ -429,6 +445,25 @@ export class WorkerManager {
         case "aiGenerate": {
           if (!this.aiGenerator) throw new Error("AI is not available");
           result = await this.aiGenerator(args);
+          break;
+        }
+
+        case "publishEntity": {
+          const publisher = this.entityPublisher;
+          if (!publisher) throw new Error("Publishing entities needs MQTT: install and start the Mosquitto broker app in Home Assistant, then restart TAE");
+          const { automationId, component, objectId, options, state, attributes } = args;
+          publisher.define({ component, objectId, owner: automationId, ...options });
+          publisher.setState(component, objectId, state, attributes);
+          result = null;
+          break;
+        }
+
+        case "removeEntity": {
+          const { automationId, component, objectId } = args;
+          if (this.entityPublisher?.ownedBy(automationId).some((entity) => entity.component === component && entity.objectId === objectId)) {
+            this.entityPublisher.remove(component, objectId);
+          }
+          result = null;
           break;
         }
 

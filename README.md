@@ -421,6 +421,27 @@ try {
 
 The **Automations model** in AI settings picks the model: the same as inline completions (default), the same as the chat, or a custom one (for example a cheap model just for automations). It rejects when AI isn't configured, the request fails or times out, or the automation passes **30 requests per hour**, so always keep a fallback. Each request's model, tokens and approximate cost are written to the automation's log. In tests it returns a placeholder (`[AI text for: …]`) without calling the AI; live test runs use the real AI.
 
+### Publishing Entities
+
+`this.sensor(objectId, options?)` and `this.binarySensor(objectId, options?)` publish your own entities to Home Assistant over MQTT, for values an automation computes or fetches (a forecast from an API, a derived "someone home" flag). They show up under the **TAE** device as `sensor.<objectId>` / `binary_sensor.<objectId>`, keep their state across HA restarts, and work in dashboards and other automations like any entity.
+
+```typescript
+const forecast = this.sensor('outdoor_feel', { name: 'Feels like', unit: '°C', deviceClass: 'temperature' });
+await forecast.set(8.5, { source: 'meteoblue' });   // state (null = unknown) + optional attributes
+await this.binarySensor('rain_soon', { name: 'Rain soon' }).set(true);
+```
+
+Options: `name`, `icon`, `unit`, `deviceClass`, `stateClass`. This needs the **Mosquitto broker** app; TAE finds it on its own. Without it, `set()` rejects and explains what's missing.
+
+### TAE in Home Assistant
+
+With the Mosquitto broker app installed, TAE also shows itself in HA under the **TAE** device:
+
+- `sensor.tae_status`: `running` or `stopped`, with the version and how many automations run, are stopped or have errors
+- one switch per automation (`switch.tae_<automation>`, e.g. `switch.tae_spotify_follows_pc`): on while the automation runs; switching it starts or stops the automation. Attributes carry its state and last error
+
+Switches of automations you delete are removed from HA after the next load.
+
 ### Standalone Functions
 
 These functions provide the same capabilities as instance methods but can be used outside of an automation class - e.g., in `onInit()` or utility modules.
@@ -796,6 +817,11 @@ Snippet files are loaded automatically when TAE starts. After editing a `.snippe
 | Terminal command returns string error | Make sure to quote string arguments: `callService('light', 'turn_on', {entity_id: 'light.x'})` |
 
 ## Changelog
+
+### 1.12.0
+
+- **Feature**: automations publish their own entities to Home Assistant: `this.sensor(id, options).set(state, attributes)` and `this.binarySensor(...)`, over MQTT discovery (needs the Mosquitto broker app). They appear under a **TAE** device and survive HA restarts
+- **Feature**: TAE in Home Assistant: `sensor.tae_status` (running, version, automation counts) and a switch per automation that shows whether it runs and starts or stops it
 
 ### 1.11.0
 

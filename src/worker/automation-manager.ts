@@ -368,6 +368,24 @@ export class AutomationManager {
     );
   }
 
+  /** this.sensor / this.binarySensor: main publishes the entity over MQTT. */
+  async publishEntity(
+    automation: AutomationInstance,
+    component: string,
+    objectId: string,
+    options: Record<string, unknown>,
+    state: string,
+    attributes?: Record<string, unknown>
+  ): Promise<void> {
+    this.assertRunning(automation);
+    this.record({ kind: "log", level: "debug", message: `${component}.${objectId} = ${state}` });
+    await this.bridge.request("publishEntity", { automationId: automation.id, component, objectId, options, state, attributes });
+  }
+
+  async removeEntity(automation: AutomationInstance, component: string, objectId: string): Promise<void> {
+    await this.bridge.request("removeEntity", { automationId: automation.id, component, objectId });
+  }
+
   logMessage(level: string, automationId: string, message: any, extra?: any): void {
     this.bridge.sendLog(level, automationId, message, extra);
     this.record({ kind: "log", level, message: formatLogMessage(message).slice(0, TRACE_LOG_MAX_CHARS) });

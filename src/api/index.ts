@@ -25,6 +25,9 @@ export {
   AutomationAI,
   AIGenerateOptions,
   CallServiceOptions,
+  PublishedEntityOptions,
+  PublishedSensor,
+  PublishedBinarySensor,
   LogLevel,
 } from "./types";
 

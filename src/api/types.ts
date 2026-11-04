@@ -81,3 +81,31 @@ export interface AutomationAI {
    */
   generate(prompt: string, options?: AIGenerateOptions): Promise<string>;
 }
+
+/** How a published entity looks in Home Assistant. All optional. */
+export interface PublishedEntityOptions {
+  /** Shown name; defaults to the device name "TAE". HA shows it as "TAE <name>". */
+  name?: string;
+  /** MDI icon, e.g. "mdi:weather-partly-cloudy". */
+  icon?: string;
+  /** Unit of measurement, e.g. "°C" or "W" (sensors). */
+  unit?: string;
+  /** HA device class, e.g. "temperature", "power", "door". */
+  deviceClass?: string;
+  /** HA state class for statistics, e.g. "measurement" (sensors). */
+  stateClass?: string;
+}
+
+/** A sensor this automation publishes to Home Assistant (over MQTT; needs the Mosquitto broker app). */
+export interface PublishedSensor {
+  /** Sets the state (null = unknown) and, optionally, attributes. The entity is created on the first call. */
+  set(state: string | number | null, attributes?: Record<string, unknown>): Promise<void>;
+  /** Removes the entity from Home Assistant. */
+  remove(): Promise<void>;
+}
+
+/** A binary sensor (on/off) this automation publishes to Home Assistant. */
+export interface PublishedBinarySensor {
+  set(on: boolean, attributes?: Record<string, unknown>): Promise<void>;
+  remove(): Promise<void>;
+}

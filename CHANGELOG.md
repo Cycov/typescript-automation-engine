@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.12.0
+
+- **Feature**: automations publish their own entities to Home Assistant: `this.sensor(id, options).set(state, attributes)` and `this.binarySensor(...)`, over MQTT discovery (needs the Mosquitto broker app). They appear under a **TAE** device and survive HA restarts
+- **Feature**: TAE in Home Assistant: `sensor.tae_status` (running, version, automation counts) and a switch per automation that shows whether it runs and starts or stops it
+
 ## 1.11.0
 
 - **Feature**: AI settings have an **Automations model** for `this.ai.generate`: the same as inline completions (default), the same as the chat, or a custom model. The dialog shows which model automations end up using

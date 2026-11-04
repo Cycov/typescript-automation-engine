@@ -20,6 +20,9 @@ import {
   AutomationStorage,
   AutomationAI,
   CallServiceOptions,
+  PublishedBinarySensor,
+  PublishedEntityOptions,
+  PublishedSensor,
   PersistentStorage,
   TempStorage,
   LogLevel,
@@ -114,6 +117,33 @@ export abstract class Automation {
     };
     this.storage = { persistent, temp };
     this.ai = { generate: (prompt, options) => getManager().aiGenerate(this, prompt, options) };
+  }
+
+  // ─── Entities published to Home Assistant ───────────────────
+
+  /**
+   * A sensor this automation publishes to Home Assistant, created on the first `set()`.
+   * It appears under the "TAE" device as `sensor.<objectId>` and survives HA restarts (MQTT, retained).
+   * Needs the Mosquitto broker app; `set()` rejects with an explanation when MQTT isn't available.
+   *
+   * @example
+   * const forecast = this.sensor('meteoblue_forecast', { name: 'Meteoblue forecast', unit: '°C' });
+   * await forecast.set(12.4, { hourly, daily });
+   */
+  sensor(objectId: string, options: PublishedEntityOptions = {}): PublishedSensor {
+    return {
+      set: (state, attributes) =>
+        getManager().publishEntity(this, "sensor", objectId, options, state === null ? "None" : String(state), attributes),
+      remove: () => getManager().removeEntity(this, "sensor", objectId),
+    };
+  }
+
+  /** A binary sensor (on/off) this automation publishes, as `binary_sensor.<objectId>`. See `sensor()`. */
+  binarySensor(objectId: string, options: PublishedEntityOptions = {}): PublishedBinarySensor {
+    return {
+      set: (on, attributes) => getManager().publishEntity(this, "binary_sensor", objectId, options, on ? "ON" : "OFF", attributes),
+      remove: () => getManager().removeEntity(this, "binary_sensor", objectId),
+    };
   }
 
   // ─── Lifecycle hooks (override in subclass) ────────────────
