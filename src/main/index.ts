@@ -22,7 +22,7 @@ import { Storage } from "./storage";
 import { Logger } from "./logging";
 import { WorkerManager } from "./worker-manager";
 import { FileManager } from "./file-manager";
-import { AISettings, AIConfig, AIOptions, PROVIDER_IDS, ProviderId } from "./ai/config";
+import { AISettings, AIConfig, AIOptions, AUTOMATION_MODEL_SOURCES, AutomationModelSource, PROVIDER_IDS, ProviderId } from "./ai/config";
 import { ChatAgent, ApprovalDecision } from "./ai/agent";
 import { AIMemory } from "./ai/memory";
 import { AutomationAI } from "./ai/automation-ai";
@@ -850,6 +850,11 @@ wss.on("connection", (ws) => {
             if (typeof msg.apiKey === "string" && msg.apiKey.trim()) change.apiKey = msg.apiKey.trim();
             if (typeof msg.model === "string") change.model = msg.model.trim();
             if (typeof msg.completionModel === "string") change.completionModel = msg.completionModel.trim();
+            if (msg.automationModelSource !== undefined) {
+              if (!AUTOMATION_MODEL_SOURCES.includes(msg.automationModelSource)) throw new Error(`Unknown automation model source ${msg.automationModelSource}`);
+              change.automationModelSource = msg.automationModelSource as AutomationModelSource;
+            }
+            if (typeof msg.automationModel === "string") change.automationModel = msg.automationModel.trim();
             for (const field of ["chatEffort", "completionEffort"] as const) {
               if (msg[field] === undefined) continue;
               if (!EFFORT_LEVELS.includes(msg[field])) throw new Error(`Unknown effort level ${msg[field]}`);

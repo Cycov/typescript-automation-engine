@@ -1793,7 +1793,7 @@ supported_features: 40"></textarea>
   <div class="dialog-overlay" id="aiSettingsDialog">
     <div class="dialog" style="min-width: 480px; max-width: 560px; max-height: 90vh; overflow-y: auto;">
       <h3>🤖 AI Settings</h3>
-      <p>Used by the AI chat and inline completions. Saved in TAE (overriding the add-on configuration) and kept across restarts.</p>
+      <p>Used by the AI chat, inline completions and automations (<code>this.ai.generate</code>). Saved in TAE (overriding the add-on configuration) and kept across restarts.</p>
       <div style="margin-bottom: 12px;">
         <label class="ai-settings-label">Provider</label>
         <select id="aiSettProvider" onchange="updateAiProviderHelp()" style="width: 100%; background: var(--bg-input); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 4px; font-family: inherit; font-size: 12px;">
@@ -1848,6 +1848,18 @@ supported_features: 40"></textarea>
         </div>
       </div>
       <div class="ai-settings-hint" id="aiEffortHint" style="margin-bottom: 12px;"></div>
+      <div style="margin-bottom: 12px;">
+        <label class="ai-settings-label">Automations model <span style="font-size: 10px;">(<code>this.ai.generate</code> in your automations)</span></label>
+        <div class="ai-settings-row">
+          <select id="aiSettAutomationSource" onchange="updateAiAutomationModel()" style="flex: 0 0 auto; background: var(--bg-input); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 4px; font-family: inherit; font-size: 12px;">
+            <option value="completion">Same as inline completion</option>
+            <option value="chat">Same as chat</option>
+            <option value="custom">Custom</option>
+          </select>
+          <input type="text" id="aiSettAutomationModel" list="aiModelList" oninput="updateAiAutomationModel()" />
+        </div>
+        <div class="ai-settings-hint" id="aiAutomationModelHint"></div>
+      </div>
       <div id="aiSettStatus" style="font-size: 11px; margin-bottom: 4px;"></div>
 
       <div class="ai-settings-section">
@@ -5388,6 +5400,8 @@ supported_features: 40"></textarea>
       document.getElementById('aiSettCompletionModel').value = aiConfig.completionModel || '';
       document.getElementById('aiSettChatEffort').value = aiConfig.chatEffort || '';
       document.getElementById('aiSettCompletionEffort').value = aiConfig.completionEffort || '';
+      document.getElementById('aiSettAutomationSource').value = aiConfig.automationModelSource || 'completion';
+      document.getElementById('aiSettAutomationModel').value = aiConfig.automationModel || '';
       document.getElementById('aiModelList').innerHTML = '';
       document.getElementById('aiModelsHint').textContent = 'Leave empty to use the default shown.';
       const status = document.getElementById('aiSettStatus');
@@ -5412,12 +5426,30 @@ supported_features: 40"></textarea>
       else if (provider === aiConfig.provider && aiConfig.keySet) keyHint.textContent = 'A key is saved (' + aiConfig.keyHint + '). Leave empty to keep it.';
       else keyHint.textContent = 'Required.';
       document.getElementById('aiEffortHint').textContent = AI_EFFORT_HELP[provider] || '';
+      updateAiAutomationModel();
       if (AI_PROVIDER_HELP[provider]) {
         help.innerHTML = AI_PROVIDER_HELP[provider];
         help.style.display = 'block';
       } else {
         help.style.display = 'none';
       }
+    }
+
+    /** Shows the custom model field only for "Custom", and which model automations end up using. */
+    function updateAiAutomationModel() {
+      const provider = document.getElementById('aiSettProvider').value;
+      const defaults = (aiConfig.defaults && aiConfig.defaults[provider]) || { chat: '', completion: '' };
+      const source = document.getElementById('aiSettAutomationSource').value;
+      const input = document.getElementById('aiSettAutomationModel');
+      const chat = document.getElementById('aiSettModel').value.trim() || defaults.chat;
+      const completion = document.getElementById('aiSettCompletionModel').value.trim() || defaults.completion || chat;
+      input.style.display = source === 'custom' ? '' : 'none';
+      input.placeholder = 'Empty = the inline completion model (' + (completion || 'none') + ')';
+      const model = source === 'chat' ? chat : source === 'custom' ? (input.value.trim() || completion) : completion;
+      const effort = source === 'chat' ? 'chat effort' : 'inline completion effort';
+      document.getElementById('aiAutomationModelHint').textContent = model
+        ? 'Automations use ' + model + ' with the ' + effort + '. A cheap, fast model is plenty for announcements and notification texts.'
+        : 'No model yet: set a chat model first.';
     }
 
     function loadAiModels() {
@@ -5578,6 +5610,8 @@ supported_features: 40"></textarea>
         completionModel: document.getElementById('aiSettCompletionModel').value.trim(),
         chatEffort: document.getElementById('aiSettChatEffort').value,
         completionEffort: document.getElementById('aiSettCompletionEffort').value,
+        automationModelSource: document.getElementById('aiSettAutomationSource').value,
+        automationModel: document.getElementById('aiSettAutomationModel').value.trim(),
       });
       closeAiSettingsDialog();
     }

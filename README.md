@@ -415,11 +415,11 @@ try {
 | Option | Description |
 |--------|-------------|
 | `system` | Instructions: role, tone, language, length, format |
-| `model` | `"fast"` (default) uses the completion model, e.g. Claude Haiku; `"smart"` uses the chat model |
+| `model` | `"fast"` (default) uses the **Automations model** from AI settings; `"smart"` uses the chat model |
 | `maxTokens` | Answer length cap (default 500, at most 4000) |
 | `timeoutMs` | Give up after this long (default 30 s, at most 120 s) |
 
-It rejects when AI isn't configured, the request fails or times out, or the automation passes **30 requests per hour**, so always keep a fallback. Each request's model, tokens and approximate cost are written to the automation's log. In tests it returns a placeholder (`[AI text for: …]`) without calling the AI; live test runs use the real AI.
+The **Automations model** in AI settings picks the model: the same as inline completions (default), the same as the chat, or a custom one (for example a cheap model just for automations). It rejects when AI isn't configured, the request fails or times out, or the automation passes **30 requests per hour**, so always keep a fallback. Each request's model, tokens and approximate cost are written to the automation's log. In tests it returns a placeholder (`[AI text for: …]`) without calling the AI; live test runs use the real AI.
 
 ### Standalone Functions
 
@@ -796,6 +796,10 @@ Snippet files are loaded automatically when TAE starts. After editing a `.snippe
 | Terminal command returns string error | Make sure to quote string arguments: `callService('light', 'turn_on', {entity_id: 'light.x'})` |
 
 ## Changelog
+
+### 1.11.0
+
+- **Feature**: AI settings have an **Automations model** for `this.ai.generate`: the same as inline completions (default), the same as the chat, or a custom model. The dialog shows which model automations end up using
 
 ### 1.10.0
 

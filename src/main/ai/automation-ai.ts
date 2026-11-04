@@ -58,8 +58,8 @@ export class AutomationAI {
     this.countRequest(automationId);
 
     const smart = options.model === "smart";
-    const model = smart ? this.settings.chatModel(config) : this.settings.completionModel(config);
-    const effort = smart ? config.chatEffort : config.completionEffort;
+    const model = smart ? this.settings.chatModel(config) : this.settings.automationModel(config);
+    const effort = smart ? config.chatEffort : this.settings.automationEffort(config);
     const maxTokens = clamp(options.maxTokens, DEFAULT_MAX_TOKENS, MAX_TOKENS_LIMIT);
     const timeoutMs = clamp(options.timeoutMs, DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
     const system = typeof options.system === "string" && options.system.trim() ? options.system : DEFAULT_SYSTEM;

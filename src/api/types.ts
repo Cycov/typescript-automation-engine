@@ -64,7 +64,7 @@ export interface CallServiceOptions {
 export interface AIGenerateOptions {
   /** Instructions for the model: role, tone, format, length. */
   system?: string;
-  /** `"fast"` (default) uses the completion model (e.g. Claude Haiku), `"smart"` the chat model. */
+  /** `"fast"` (default) uses the Automations model from TAE's AI settings, `"smart"` the chat model. */
   model?: "fast" | "smart";
   /** Upper bound on the answer length in tokens (default 500, at most 4000). */
   maxTokens?: number;

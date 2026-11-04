@@ -186,7 +186,7 @@ automation passes 30 requests per hour — always keep a plain fallback text. Ea
 | Option      | Type                  | Description |
 |-------------|-----------------------|-------------|
 | `system`    | `string?`             | Instructions: role, tone, language, length, format. |
-| `model`     | `"fast" \| "smart"`  | `"fast"` (default): the completion model (e.g. Claude Haiku). `"smart"`: the chat model. |
+| `model`     | `"fast" \| "smart"`  | `"fast"` (default): the Automations model chosen in TAE's AI settings. `"smart"`: the chat model. |
 | `maxTokens` | `number?`             | Answer length cap (default 500, at most 4000). |
 | `timeoutMs` | `number?`             | Give up after this long (default 30000, at most 120000). |
 

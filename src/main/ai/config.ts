@@ -18,13 +18,21 @@ export interface AIOptions {
   completionModel: string;
 }
 
+/** Which model automations' this.ai.generate uses. */
+export type AutomationModelSource = "completion" | "chat" | "custom";
+
+export const AUTOMATION_MODEL_SOURCES: AutomationModelSource[] = ["completion", "chat", "custom"];
+
 export interface AIConfig extends AIOptions {
   chatEffort: EffortLevel;
   completionEffort: EffortLevel;
+  automationModelSource: AutomationModelSource;
+  automationModel: string; //< used when the source is "custom"
 }
 
 const DEFAULT_CHAT_EFFORT: EffortLevel = ""; //< model default
 const DEFAULT_COMPLETION_EFFORT: EffortLevel = "low"; //< completions must be fast
+const DEFAULT_AUTOMATION_MODEL_SOURCE: AutomationModelSource = "completion";
 
 /** Used when the model fields are left empty. */
 export const DEFAULT_MODELS: Record<ProviderId, { chat: string; completion: string }> = {
@@ -46,6 +54,10 @@ export interface AIConfigInfo {
   defaultCompletionModel: string;
   chatEffort: EffortLevel;
   completionEffort: EffortLevel;
+  automationModelSource: AutomationModelSource;
+  automationModel: string;
+  /** The model this.ai.generate uses with these settings. */
+  effectiveAutomationModel: string;
   configured: boolean;
   keySet: boolean;
   keyHint: string;
@@ -69,9 +81,12 @@ export class AISettings {
     const merged: AIConfig = {
       chatEffort: DEFAULT_CHAT_EFFORT,
       completionEffort: DEFAULT_COMPLETION_EFFORT,
+      automationModelSource: DEFAULT_AUTOMATION_MODEL_SOURCE,
+      automationModel: "",
       ...this.fromOptions,
       ...(this.saved || {}),
     };
+    if (!AUTOMATION_MODEL_SOURCES.includes(merged.automationModelSource)) merged.automationModelSource = DEFAULT_AUTOMATION_MODEL_SOURCE;
     if (!PROVIDER_IDS.includes(merged.provider)) merged.provider = "none";
     if (!EFFORT_LEVELS.includes(merged.chatEffort)) merged.chatEffort = DEFAULT_CHAT_EFFORT;
     if (!EFFORT_LEVELS.includes(merged.completionEffort)) merged.completionEffort = DEFAULT_COMPLETION_EFFORT;
@@ -88,6 +103,18 @@ export class AISettings {
     return config.completionModel || DEFAULT_MODELS[config.provider].completion || this.chatModel(config);
   }
 
+  /** Model for automations (this.ai.generate): completion model, chat model or a custom one (empty = completion model). */
+  automationModel(config: AIConfig = this.get()): string {
+    if (config.automationModelSource === "chat") return this.chatModel(config);
+    if (config.automationModelSource === "custom" && config.automationModel) return config.automationModel;
+    return this.completionModel(config);
+  }
+
+  /** Effort for automations: the chat effort with the chat model, the completion effort otherwise. */
+  automationEffort(config: AIConfig = this.get()): EffortLevel {
+    return config.automationModelSource === "chat" ? config.chatEffort : config.completionEffort;
+  }
+
   isConfigured(config: AIConfig = this.get()): boolean {
     return config.provider !== "none" && !!config.apiKey && !!this.chatModel(config);
   }
@@ -101,6 +128,8 @@ export class AISettings {
       completionModel: change.completionModel ?? current.completionModel,
       chatEffort: change.chatEffort ?? current.chatEffort,
       completionEffort: change.completionEffort ?? current.completionEffort,
+      automationModelSource: change.automationModelSource ?? current.automationModelSource,
+      automationModel: change.automationModel ?? current.automationModel,
       apiKey: current.apiKey,
     };
     if (change.apiKey) {
@@ -122,6 +151,9 @@ export class AISettings {
       defaultCompletionModel: DEFAULT_MODELS[config.provider].completion,
       chatEffort: config.chatEffort,
       completionEffort: config.completionEffort,
+      automationModelSource: config.automationModelSource,
+      automationModel: config.automationModel,
+      effectiveAutomationModel: this.automationModel(config),
       configured: this.isConfigured(config),
       keySet: !!config.apiKey,
       keyHint: config.apiKey ? `…${config.apiKey.slice(-KEY_HINT_CHARS)}` : "",
