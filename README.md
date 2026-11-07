@@ -580,6 +580,8 @@ Every save, AI edit, import, restore and delete is kept as a version, including 
 
 The workspace is also a git repository (TAE installs git and commits the workspace as it is on first start). The file history above keeps every save; commits are named steps on top of it, made by the AI chat or an MCP client with `commit_changes` after a piece of work. Each commit is pushed to a bare mirror repository, by default `/share/tae.git`, so you can `git clone` it from another machine (over the SSH add-on: `git clone root@homeassistant.local:/share/tae.git`) to read the history with your own tools.
 
+Secret files never go into git, since the mirror is readable by anyone with access to `/share`: keep API keys, passwords and tokens in a file named `*-secret.ts` (or `*.secret.ts`, `secrets.ts`) and import it. Such a file stays in the workspace and works as usual, but it is in `.gitignore`, and if one is found in the history TAE removes it from every commit on start. A clone of the mirror therefore needs its own copy of those files to type-check.
+
 ### File Saving Behavior
 
 - **`Ctrl+S` / `Cmd+S`** saves the currently active file immediately.
@@ -824,6 +826,10 @@ Snippet files are loaded automatically when TAE starts. After editing a `.snippe
 | Terminal command returns string error | Make sure to quote string arguments: `callService('light', 'turn_on', {entity_id: 'light.x'})` |
 
 ## Changelog
+
+### 1.13.1
+
+- **Fix**: secret files stay out of the workspace's git history. 1.13.0 committed every file, so API keys kept in a workspace file ended up in the `/share/tae.git` mirror, which anyone with access to `/share` can read. Files named `*-secret.ts`, `*.secret.ts` or `secrets.ts` are now in `.gitignore`, and on start TAE removes any that are already in the history from every commit (authors, dates and messages stay) and prunes them from the mirror. The files themselves stay in the workspace
 
 ### 1.13.0
 

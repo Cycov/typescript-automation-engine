@@ -619,6 +619,8 @@ restart when the automation keeps something in persistent storage.
 - Use guard clauses (`if (condition) return;`) to keep callbacks clean
 - Use `color_temp_kelvin` for white light temperature — Home Assistant 2026.3 removed the mired `color_temp` (and
   `kelvin`) keys from `light.turn_on`, and rejects calls that still send them
+- Put API keys, passwords and tokens in their own file named `*-secret.ts` (e.g. `weather/meteoblue-secret.ts`
+  exporting a constant) and import it: such files stay out of the workspace's git history and its `/share` mirror
 
 ### Don't:
 - Don't forget to export `onInit()` from `index.ts` — nothing runs without it; `onInit()` in other files is never called
