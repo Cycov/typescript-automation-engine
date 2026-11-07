@@ -201,7 +201,7 @@ export abstract class Automation {
    * await this.callService('light', 'turn_on', {
    *   entity_id: 'light.living_room',
    *   brightness: 200,
-   *   color_temp: 350,
+   *   color_temp_kelvin: 2850,
    * });
    *
    * @example

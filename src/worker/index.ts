@@ -146,6 +146,19 @@ async function loadAutomations(): Promise<string | undefined> {
   }
 }
 
+/**
+ * A TAE restart inside a test: stop and unload every automation, then forget the
+ * workspace modules (its own copy of the tae module included, which numbers the
+ * automation ids), so the next load starts from scratch like a new worker.
+ */
+async function unloadAutomations(): Promise<void> {
+  await manager.unloadAll("stop");
+  const workspace = path.resolve(automationsPath) + path.sep;
+  for (const cached of Object.keys(require.cache)) {
+    if (cached.startsWith(workspace)) delete require.cache[cached];
+  }
+}
+
 async function runLive(): Promise<void> {
   manager.enableTracing();
   bridge.sendReady();
@@ -158,7 +171,7 @@ async function runTest(): Promise<void> {
   const startedAt = Date.now();
   manager.setStartFilter(testSpec.scenario.automations);
   try {
-    const result = await runTestScenario({ spec: testSpec, host: testHost, manager, loadAutomations });
+    const result = await runTestScenario({ spec: testSpec, host: testHost, manager, loadAutomations, unloadAutomations });
     bridge.post({ type: "testResult", result: { ...result, ranAt: new Date(startedAt).toISOString(), realMs: Date.now() - startedAt } });
   } catch (e: any) {
     bridge.post({

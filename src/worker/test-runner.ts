@@ -6,7 +6,7 @@
 
 import * as FakeTimers from "@sinonjs/fake-timers";
 import { AutomationManager } from "./automation-manager";
-import { TestHost } from "./test-host";
+import { TestHost, matchesSubset } from "./test-host";
 import { TestExpectationResult, TestResult, TestRunSpec, TestStep } from "../shared/tests";
 
 const realSetImmediate = setImmediate;
@@ -37,10 +37,24 @@ export function describeStep(step: TestStep): string {
     case "event":
       return `Fire event ${step.eventType}`;
     case "expect_state":
-      return `Expect ${step.entityId} is ${step.state}`;
+      return `Expect ${step.entityId} is ${step.state}${step.attributes ? " with " + JSON.stringify(step.attributes) : ""}`;
     case "expect_service":
-      return `Expect ${step.not ? "no " : ""}${step.service}${step.entityId ? " on " + step.entityId : ""}`;
+      return `Expect ${serviceTarget(step)}`;
+    case "restart":
+      return "Restart TAE";
   }
+}
+
+const DETAIL_MAX_CHARS = 300;
+
+function serviceTarget(step: Extract<TestStep, { type: "expect_service" }>): string {
+  const times = step.not ? "no " : step.count !== undefined ? `${step.count}× ` : "";
+  return `${times}${step.service}${step.entityId ? " on " + step.entityId : ""}${step.data ? " with " + JSON.stringify(step.data) : ""}`;
+}
+
+function shortJson(value: unknown): string {
+  const text = JSON.stringify(value);
+  return text.length > DETAIL_MAX_CHARS ? `${text.slice(0, DETAIL_MAX_CHARS)}…` : text;
 }
 
 export interface TestRunInput {
@@ -49,9 +63,11 @@ export interface TestRunInput {
   manager: AutomationManager;
   /** Load index.ts and run onInit(); returns an error message on failure. */
   loadAutomations: () => Promise<string | undefined>;
+  /** Stop and unload every automation and forget the loaded workspace code, as a TAE restart does. */
+  unloadAutomations: () => Promise<void>;
 }
 
-export async function runTestScenario({ spec, host, manager, loadAutomations }: TestRunInput): Promise<Omit<TestResult, "realMs" | "ranAt">> {
+export async function runTestScenario({ spec, host, manager, loadAutomations, unloadAutomations }: TestRunInput): Promise<Omit<TestResult, "realMs" | "ranAt">> {
   const { scenario } = spec;
   const clock = FakeTimers.install({ now: spec.startTimeMs, toFake: FAKED_TIMERS });
   const realTime = host.live && !!scenario.realTimeWaits;
@@ -129,31 +145,50 @@ export async function runTestScenario({ spec, host, manager, loadAutomations }: 
           break;
         }
         case "expect_state": {
-          const actual = host.states.get(step.entityId)?.state;
-          const passed = actual === step.state;
-          const message = passed
-            ? `${step.entityId} is ${step.state}`
-            : `${step.entityId} is ${actual === undefined ? "missing" : actual}, expected ${step.state}`;
+          const entity = host.states.get(step.entityId);
+          const stateOk = entity?.state === step.state;
+          const attributesOk = !step.attributes || (!!entity && matchesSubset(entity.attributes, step.attributes));
+          const passed = stateOk && attributesOk;
+          let message = `${step.entityId} is ${step.state}${step.attributes ? " with " + shortJson(step.attributes) : ""}`;
+          if (!entity) message = `${step.entityId} is missing, expected ${step.state}`;
+          else if (!stateOk) message = `${step.entityId} is ${entity.state}, expected ${step.state}`;
+          else if (!attributesOk) message = `${step.entityId} attributes ${shortJson(entity.attributes)} don't match ${shortJson(step.attributes)}`;
           expectations.push({ step: iStep, passed, message });
           host.add("expect", message, { passed });
           break;
         }
         case "expect_service": {
-          const matching = host.calls
+          const sameService = host.calls
             .slice(serviceMark)
             .filter((call) => `${call.domain}.${call.service}` === step.service && (!step.entityId || call.entityIds.includes(step.entityId)));
+          const matching = sameService.filter((call) => !step.data || matchesSubset(call.data, step.data));
           serviceMark = host.calls.length;
-          const target = `${step.service}${step.entityId ? " on " + step.entityId : ""}`;
-          const passed = step.not ? matching.length === 0 : matching.length > 0;
-          const message = step.not
-            ? passed
-              ? `${target} was not called`
-              : `${target} was called ${matching.length}× (expected none)`
-            : passed
-              ? `${target} was called${matching.length > 1 ? ` ${matching.length}×` : ""}`
-              : `${target} was not called`;
+          const target = serviceTarget(step);
+          const wanted = step.not ? 0 : step.count;
+          const passed = wanted !== undefined ? matching.length === wanted : matching.length > 0;
+          let message: string;
+          if (passed) message = matching.length === 0 ? `${target}: not called` : `${target}: called${matching.length > 1 ? ` ${matching.length}×` : ""}`;
+          else if (wanted !== undefined && matching.length > 0) message = `${target}: called ${matching.length}× (expected ${wanted})`;
+          else if (sameService.length > 0) message = `${target}: not called with that data; it got ${sameService.map((call) => shortJson(call.data)).join(", ")}`;
+          else message = `${target}: not called`;
           expectations.push({ step: iStep, passed, message });
-          host.add("expect", message, { passed });
+          host.add("expect", message, { passed, ...(matching.length ? { detail: matching.map((call) => call.data) } : {}) });
+          break;
+        }
+        case "restart": {
+          host.add("step", describeStep(step));
+          await unloadAutomations();
+          // a new worker has no timers left over from the old one
+          const now = clock.now;
+          clock.reset();
+          clock.setSystemTime(now);
+          host.restart();
+          const restartError = await loadAutomations();
+          await settle();
+          if (restartError) {
+            expectations.push({ step: iStep, passed: false, message: restartError });
+            host.add("expect", restartError, { passed: false });
+          }
           break;
         }
       }

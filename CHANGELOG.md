@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.13.0
+
+- **Feature**: tests check the data of a service call: `expect_service` takes `data` (the call's data must contain these values, nested objects too) and `count` (exactly this many calls). A mismatch says what the call sent instead
+- **Feature**: entities an automation publishes (`this.publish.*`) are simulated states in tests, so `expect_state` can check them (with `attributes` that must match) and other automations see them change
+- **Feature**: tests can restart TAE: a **Restart TAE** step stops the automations and loads them again; persistent storage, states and published entities stay, timers and temp storage are gone. A scenario's `storage` sets persistent storage per automation before the run (other automations get a copy of their real storage), to test what an automation does when it starts with something remembered
+- **Feature**: the workspace is a git repository. On first start TAE commits it as it is; MCP clients and the AI chat review a piece of work across files with `workspace_changes`, commit it with a message (`commit_changes`, optionally only some files) and read the history (`workspace_log`). Commits are mirrored to a bare repository, by default `/share/tae.git` (option `git_mirror_path`; `none` = no mirror), so it can be cloned over SSH or Samba
+- **Fix**: the API reference, README and JSDoc examples used the mired `color_temp`, which Home Assistant 2026.3 removed (it rejects such calls); they use `color_temp_kelvin` now, and the reference says so
+
 ## 1.12.1
 
 - **Change**: publishing entities moved to `this.publish.sensor(...)` / `this.publish.binarySensor(...)`, so it can't collide with a `sensor` field of your own automations

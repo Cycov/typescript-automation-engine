@@ -224,7 +224,9 @@ await this.publish.binarySensor('rain_soon', { name: 'Rain soon' }).set(true);
 await forecast.remove();                              // delete it from HA
 ```
 
-Keep attributes under ~16 KB (HA's history skips bigger ones). In tests nothing is published; the test log shows the values.
+Keep attributes under ~16 KB (HA's history skips bigger ones). In tests nothing reaches Home Assistant: a published
+entity becomes a simulated state (`binary_sensor.<objectId>` is `on`/`off`, a sensor's `null` is `unknown`), so
+`expect_state` can check it and other automations see it change.
 
 ### Standalone Functions
 
@@ -513,7 +515,7 @@ class SmartMotionLight extends Automation {
       await this.callService('light', 'turn_on', {
         entity_id: 'light.living_room',
         brightness: 180,
-        color_temp: 370,
+        color_temp_kelvin: 2700, // warm white; HA 2026.3+ has no mired color_temp
       });
       this.log('Living room light on — motion + dark');
     });
@@ -552,7 +554,7 @@ class MorningRoutine extends Automation {
         await this.callService('light', 'turn_on', {
           entity_id: 'light.bedroom',
           brightness: 255,
-          color_temp: 250,
+          color_temp_kelvin: 4000,
         });
         await this.callService('media_player', 'set_volume_level', {
           entity_id: 'media_player.bedroom_speaker',
@@ -574,6 +576,30 @@ export async function onInit() {
 }
 ```
 
+## Testing (scenarios)
+
+A test scenario runs the automations in an isolated copy: simulated states, a simulated clock (waits finish
+instantly), service calls recorded instead of sent. Save one with the `save_test` tool and run it with `run_test`.
+
+- `initial`: entity states before the automations start (every other entity starts with its real state).
+- `storage`: persistent storage before the run, per automation id — `{ "DishwasherAiring": { "waitingSince": 1762480000000 } }`.
+  Listed automations start with exactly these values; the others get a copy of their real storage. Use it to test what an
+  automation does when it starts with something remembered.
+- Steps, in order:
+  - `set` an entity's state (and attributes), `wait` seconds, fire an `event`;
+  - `restart`: TAE restarts — automations stop (`onStop`), and load again from `index.ts`. Persistent storage, entity
+    states and published entities stay; pending timers and temp storage are gone, as after a real restart;
+  - `expect_state`: an entity's state, optionally with `attributes` that must match (it may have more);
+  - `expect_service`: service calls since the previous `expect_service`. `entityId` = targets that entity, `data` = the
+    call's data contains these values (nested objects too), `count` = exactly this many, `not: true` = none.
+
+```json
+{ "type": "expect_service", "service": "notify.mobile_app_phone", "data": { "message": "clear_notification" }, "count": 1 }
+```
+
+Check what matters: the data a call sent (not just that it happened), published entities, and the path after a
+restart when the automation keeps something in persistent storage.
+
 ## Do's and Don'ts
 
 ### Do:
@@ -591,6 +617,8 @@ export async function onInit() {
 - Check `old_state` and `new_state` for null before accessing `.state`
 - Parse numeric sensor states with `parseFloat(state.state)`
 - Use guard clauses (`if (condition) return;`) to keep callbacks clean
+- Use `color_temp_kelvin` for white light temperature — Home Assistant 2026.3 removed the mired `color_temp` (and
+  `kelvin`) keys from `light.turn_on`, and rejects calls that still send them
 
 ### Don't:
 - Don't forget to export `onInit()` from `index.ts` — nothing runs without it; `onInit()` in other files is never called

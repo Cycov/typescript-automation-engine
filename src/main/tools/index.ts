@@ -14,6 +14,7 @@ import { EntityCatalog, buildEntityCatalog, editDistance } from "./entity-check"
 import { TestManager, testScenarioSchema } from "../test-manager";
 import { ChangeSource, FileHistory } from "../file-history";
 import { AIMemory, MEMORY_NOTE_MAX_CHARS } from "../ai/memory";
+import { WorkspaceGit } from "../workspace-git";
 import { AutomationInfo, HAEntityState, TraceInfo } from "../../shared/messages";
 import { TestResult, TestScenario } from "../../shared/tests";
 
@@ -31,6 +32,9 @@ const LOG_LEVEL_ORDER: Record<string, number> = { debug: 0, info: 1, warn: 2, er
 const TIMELINE_DEFAULT_COUNT = 10;
 const TIMELINE_MAX_COUNT = 50;
 const HISTORY_DEFAULT_COUNT = 20;
+const CHANGES_MAX_CHARS = 60_000;
+const COMMIT_MESSAGE_MAX_CHARS = 500;
+const COMMIT_AUTHORS: Record<string, string> = { mcp: "AI via MCP", "ai-chat": "TAE AI chat", editor: "TAE editor" };
 const TEST_TIMELINE_MAX_ITEMS = 200;
 const MS_PER_SECOND = 1000;
 const EDIT_HINT_EXTRA_LINES = 2; //< shown around a near miss of edit_file
@@ -46,6 +50,7 @@ export interface ToolContext {
   typeChecker: TypeChecker;
   testManager: TestManager;
   fileHistory: FileHistory;
+  workspaceGit: WorkspaceGit;
   memory: AIMemory;
   /** Who is changing files, for the file history. */
   changeSource: ChangeSource;
@@ -818,9 +823,13 @@ const tools: TaeTool[] = [
     name: "save_test",
     title: "Save a test scenario",
     description:
-      "Create or update a test scenario. initial = entity states before the automations start; steps run in order: " +
-      "set (entity state change), wait (seconds, instant), event (fire an HA event), expect_state, expect_service " +
-      "(checks service calls since the previous expect_service; not=true expects none). Use real entity ids and automation ids.",
+      "Create or update a test scenario. initial = entity states before the automations start; storage = persistent storage " +
+      "before the run per automation id (to test what happens after a restart). Steps run in order: set (entity state change), " +
+      "wait (seconds, instant), event (fire an HA event), restart (TAE restarts: automations stop and load again, persistent storage " +
+      "and states stay, timers and temp storage are gone), expect_state (optionally with attributes that must match), expect_service " +
+      "(checks service calls since the previous expect_service; data = values the call's data must contain; count = exactly this " +
+      "many; not=true expects none). Entities published with this.publish.* are simulated states, so expect_state works on them. " +
+      "Use real entity ids and automation ids.",
     input: testScenarioSchema,
     mutating: true,
     preview: async (input, ctx) => {
@@ -834,6 +843,61 @@ const tools: TaeTool[] = [
       const scenario = ctx.testManager.save(input);
       ctx.notifyTestsChanged();
       return { text: `Saved test "${scenario.name}" (id ${scenario.id}). Run it with run_test.` };
+    },
+  },
+  {
+    name: "workspace_changes",
+    title: "Workspace changes",
+    description:
+      "The workspace is a git repository: this shows everything changed since the last commit (or since `since`, e.g. a hash " +
+      "from workspace_log or HEAD~2) as one diff across all files, new files included. Use it to review a piece of work " +
+      "before commit_changes, or to see edits made in the TAE editor.",
+    input: z.object({
+      since: z.string().optional().describe("Commit to compare with (default: the last commit)"),
+      path: z.string().optional().describe("Only this file"),
+    }),
+    mutating: false,
+    run: async (input, ctx) => {
+      const changes = await ctx.workspaceGit.changes(input.since || "HEAD", input.path ? normalizePath(input.path) : undefined);
+      if (!changes.stat) return { text: `No changes since ${input.since || "the last commit"}.` };
+      return { text: `${changes.stat}\n\n${truncate(changes.diff, CHANGES_MAX_CHARS)}` };
+    },
+  },
+  {
+    name: "commit_changes",
+    title: "Commit workspace changes",
+    description:
+      "Commit the workspace changes as one named step in its git history (and the mirror in /share, which can be cloned). " +
+      "Pass paths to commit only your files, so edits someone else made in the editor stay uncommitted. " +
+      "Message: what changed and why, in a line or two.",
+    input: z.object({
+      message: z.string().min(1).max(COMMIT_MESSAGE_MAX_CHARS),
+      paths: z.array(z.string()).optional().describe("Only these files (default: every change)"),
+    }),
+    mutating: true,
+    noApproval: true,
+    run: async (input, ctx) => {
+      const files = input.paths?.map((file: string) => normalizePath(file));
+      const result = await ctx.workspaceGit.commit(input.message, COMMIT_AUTHORS[ctx.changeSource] ?? "TAE", files);
+      if (!result) return { text: "Nothing to commit." };
+      ctx.logger.log("info", "git", `Committed ${result.commit.hash}: ${result.commit.message}`);
+      const mirrored = ctx.workspaceGit.mirror ? `\nMirrored to ${ctx.workspaceGit.mirror}` : "";
+      return { text: `Committed ${result.commit.hash} "${result.commit.message}"\n${result.stat}${mirrored}` };
+    },
+  },
+  {
+    name: "workspace_log",
+    title: "Workspace git history",
+    description: "Commits of the workspace, newest first (hash, date, author, message). Use a hash with workspace_changes.",
+    input: z.object({
+      count: z.number().int().min(1).max(TIMELINE_MAX_COUNT * 2).optional(),
+      path: z.string().optional().describe("Only commits that changed this file"),
+    }),
+    mutating: false,
+    run: async (input, ctx) => {
+      const commits = await ctx.workspaceGit.history(input.count ?? HISTORY_DEFAULT_COUNT, input.path ? normalizePath(input.path) : undefined);
+      if (commits.length === 0) return { text: "No commits yet." };
+      return { text: commits.map((commit) => `${commit.hash} — ${commit.date} — ${commit.author} — ${commit.message}`).join("\n") };
     },
   },
   {

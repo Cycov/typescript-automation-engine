@@ -1,6 +1,6 @@
 name: "TypeScript Automation Engine"
 description: "Write and run Home Assistant automations in TypeScript with a managed runtime"
-version: "1.12.1"
+version: "1.13.0"
 slug: "typescript_automation_engine"
 url: "https://github.com/Cycov/typescript-automation-engine"
 arch:
@@ -21,6 +21,7 @@ ports_description:
 options:
   log_level: "info"
   sync_path: "/share/tae"
+  git_mirror_path: "/share/tae.git"
   ai_provider: "none"
   ai_api_key: ""
   ai_model: ""
@@ -28,6 +29,7 @@ options:
 schema:
   log_level: list(debug|info|warn|error)
   sync_path: str
+  git_mirror_path: str?
   ai_provider: list(none|github|openai|anthropic|deepseek)
   ai_api_key: password
   ai_model: str

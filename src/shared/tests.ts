@@ -10,8 +10,15 @@ export type TestStep =
   | { type: "set"; entityId: string; state: string; attributes?: Record<string, any> }
   | { type: "wait"; seconds: number }
   | { type: "event"; eventType: string; data?: Record<string, any> }
-  | { type: "expect_state"; entityId: string; state: string }
-  | { type: "expect_service"; service: string; entityId?: string; not?: boolean };
+  /** attributes: these must match (the entity may have more). */
+  | { type: "expect_state"; entityId: string; state: string; attributes?: Record<string, any> }
+  /**
+   * Service calls since the previous expect_service. data: the call's data must contain these values (nested objects
+   * compare the same way). count: exactly this many matching calls (not: true is the same as count 0).
+   */
+  | { type: "expect_service"; service: string; entityId?: string; data?: Record<string, any>; count?: number; not?: boolean }
+  /** TAE restarts: automations stop and load again; persistent storage, states and published entities stay. */
+  | { type: "restart" };
 
 export interface TestScenario {
   id: string;
@@ -29,6 +36,11 @@ export interface TestScenario {
   /** With liveCalls: waits take real time instead of finishing instantly. */
   realTimeWaits?: boolean;
   initial: TestStateEntry[];
+  /**
+   * Persistent storage before the run, per automation id ({ "MyAutomation": { "key": value } }). Listed automations
+   * start with exactly these values; the others get a copy of their real storage.
+   */
+  storage?: Record<string, Record<string, any>>;
   steps: TestStep[];
   updatedAt?: number;
 }

@@ -6116,6 +6116,7 @@ supported_features: 40"></textarea>
       ['expect_state', 'Expect state'],
       ['expect_service', 'Expect service call'],
       ['expect_no_service', 'Expect no service call'],
+      ['restart', 'Restart TAE'],
     ];
     const WAIT_UNITS = [['s', 1], ['min', 60], ['h', 3600]];
     const DOMAIN_STATES = {
@@ -6472,8 +6473,32 @@ supported_features: 40"></textarea>
         const value = Number(row.querySelector('.tests-input.seconds').value) || 0;
         const unit = Number(row.querySelector('.wait-unit').value) || 1;
         item.seconds = Math.max(0, Math.round(value * unit));
+      } else if (field === 'count') {
+        const text = element.value.trim();
+        if (text === '') delete item.count;
+        else item.count = Math.max(0, Math.round(Number(text) || 0));
       } else {
         item[field] = element.value.trim();
+      }
+      markTestDirty();
+    }
+
+    /** Persistent storage before the run: { "AutomationId": { "key": value } }. */
+    function updateTestStorage(element) {
+      const text = element.value.trim();
+      if (!text) {
+        delete testDraft.storage;
+        element.classList.remove('invalid');
+      } else {
+        try {
+          const parsed = JSON.parse(text);
+          const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
+          if (!isObject(parsed) || !Object.values(parsed).every(isObject)) throw new Error('not an object of objects');
+          testDraft.storage = parsed;
+          element.classList.remove('invalid');
+        } catch {
+          element.classList.add('invalid');
+        }
       }
       markTestDirty();
     }
@@ -6487,6 +6512,7 @@ supported_features: 40"></textarea>
       else if (type === 'wait') collection[index] = { type: 'wait', seconds: 60 };
       else if (type === 'event') collection[index] = { type: 'event', eventType: '' };
       else if (type === 'expect_state') collection[index] = { type: 'expect_state', entityId, state: '' };
+      else if (type === 'restart') collection[index] = { type: 'restart' };
       else collection[index] = { type: 'expect_service', service: '', entityId, ...(type === 'expect_no_service' ? { not: true } : {}) };
       markTestDirty();
       renderTestEditor();
@@ -6600,10 +6626,15 @@ supported_features: 40"></textarea>
       } else if (step.type === 'event') {
         fields = testInput('service', step.eventType, 'eventType', 'event type') + jsonInput(step.data, 'data', 'event data');
       } else if (step.type === 'expect_state') {
-        fields = entityInput(step.entityId) + '<span class="tests-hint">is</span>' + stateInput(step.state);
+        fields = entityInput(step.entityId) + '<span class="tests-hint">is</span>' + stateInput(step.state) +
+          jsonInput(step.attributes, 'attributes', 'attributes (these must match)');
+      } else if (step.type === 'restart') {
+        fields = '<span class="tests-hint">Automations stop and load again; persistent storage and states stay, timers and temp storage are gone</span>';
       } else {
         fields = testInput('service', step.service, 'service', 'light.turn_on', 'data-suggest="service" autocomplete="off"') +
-          '<span class="tests-hint">on</span>' + entityInput(step.entityId).replace('placeholder="entity id"', 'placeholder="any entity" title="Counts calls since the previous service check"');
+          '<span class="tests-hint">on</span>' + entityInput(step.entityId).replace('placeholder="entity id"', 'placeholder="any entity" title="Counts calls since the previous service check"') +
+          jsonInput(step.data, 'data', 'data (must contain)') +
+          (step.not ? '' : testInput('seconds', step.count, 'count', '× any', 'type="number" min="0" title="Exactly this many matching calls (empty = at least one)"'));
       }
       const result = stepResultFor(iStep);
       const resultMark = result ? '<span class="step-result ' + (result.passed ? 'passed' : 'failed') + '" title="' + escapeAttr(result.message) + '">' + (result.passed ? '✓' : '✗') + '</span>' : '<span class="step-result"></span>';
@@ -6632,6 +6663,10 @@ supported_features: 40"></textarea>
         jsonInput(entry.attributes, 'attributes', 'attributes') +
         '<button class="row-btn" title="Use the current real state" onclick="fillCurrentState(this)">↺ now</button></span>' + rowActions('initial') + '</div>'
       ).join('') || '<div class="tests-hint" style="padding: 2px 4px;">Every other entity starts with its current real state.</div>';
+      const storageRow = '<div class="tests-row" title="Persistent storage before the run, per automation id. Listed automations start with exactly these values; the others get a copy of their real storage">' +
+        '<span class="row-fields"><span class="tests-hint">storage</span>' +
+        '<input class="tests-input attributes" value="' + escapeAttr(testDraft.storage ? JSON.stringify(testDraft.storage) : '') + '" placeholder=\'{ "AutomationId": { "key": value } } (empty = real storage)\' oninput="updateTestStorage(this)" spellcheck="false">' +
+        '</span></div>';
 
       editor.innerHTML =
         '<div class="tests-toolbar">' +
@@ -6657,7 +6692,7 @@ supported_features: 40"></textarea>
         '<div class="tests-section">Automations <span style="text-transform:none; letter-spacing:0;">' + (testDraft.automations.length ? '(' + testDraft.automations.length + ' selected)' : '(all)') + '</span>' +
           '<button class="btn" onclick="setTestAutomations(\'file\')">Only this file\'s</button><button class="btn" onclick="setTestAutomations(\'all\')">All</button></div>' +
         '<div class="tests-chips">' + chips + '</div>' +
-        '<div class="tests-section">Before start <button class="btn" onclick="addTestRow(\'initial\')">+ Entity</button></div>' + initialRows +
+        '<div class="tests-section">Before start <button class="btn" onclick="addTestRow(\'initial\')">+ Entity</button></div>' + initialRows + storageRow +
         '<div class="tests-section">Steps <button class="btn" onclick="addTestRow(\'steps\')">+ Step</button></div>' +
         testDraft.steps.map(renderStepRow).join('');
     }
@@ -6726,6 +6761,7 @@ supported_features: 40"></textarea>
       for (const step of scenario.steps) {
         if (step.type === 'expect_service' && !step.entityId) delete step.entityId;
         if (step.type === 'expect_service' && !step.not) delete step.not;
+        if (step.type === 'expect_service' && (step.not || step.count === undefined)) delete step.count;
       }
       return scenario;
     }

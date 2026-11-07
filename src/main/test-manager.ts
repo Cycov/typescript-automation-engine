@@ -28,13 +28,21 @@ const stepSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("set"), entityId: entityIdSchema, state: z.string(), attributes: attributesSchema }),
   z.object({ type: z.literal("wait"), seconds: z.number().min(0).max(MAX_WAIT_SECONDS) }),
   z.object({ type: z.literal("event"), eventType: z.string().min(1), data: z.record(z.string(), z.any()).optional() }),
-  z.object({ type: z.literal("expect_state"), entityId: entityIdSchema, state: z.string() }),
+  z.object({
+    type: z.literal("expect_state"),
+    entityId: entityIdSchema,
+    state: z.string(),
+    attributes: attributesSchema.describe("These attributes must match (the entity may have more)"),
+  }),
   z.object({
     type: z.literal("expect_service"),
     service: z.string().regex(/^[a-z_0-9]+\.[a-z_0-9]+$/, "service like light.turn_on"),
     entityId: entityIdSchema.optional(),
+    data: z.record(z.string(), z.any()).optional().describe("The call's data must contain these values, e.g. { message: 'clear_notification' }"),
+    count: z.number().int().min(0).optional().describe("Exactly this many matching calls since the previous expect_service"),
     not: z.boolean().optional(),
   }),
+  z.object({ type: z.literal("restart") }).describe("TAE restarts: automations stop and load again; persistent storage, states and published entities stay"),
 ]);
 
 export const testScenarioSchema = z.object({
@@ -53,6 +61,10 @@ export const testScenarioSchema = z.object({
     .array(z.object({ entityId: entityIdSchema, state: z.string(), attributes: attributesSchema }))
     .default([])
     .describe("Entity states before the automations start (others keep their current real state)"),
+  storage: z
+    .record(z.string(), z.record(z.string(), z.any()))
+    .optional()
+    .describe("Persistent storage before the run, per automation id: { AutomationId: { key: value } }. Listed automations start with exactly these values; others get a copy of their real storage"),
   steps: z.array(stepSchema).default([]),
 });
 
@@ -196,7 +208,7 @@ export class TestManager {
     const workerData: WorkerData = {
       config: this.config,
       states: initialStates(this.haClient.getAllStates(), scenario, startTimeMs),
-      test: { scenario, startTimeMs, storage: this.storage.getAllPersistent(), liveCalls },
+      test: { scenario, startTimeMs, storage: { ...this.storage.getAllPersistent(), ...(scenario.storage ?? {}) }, liveCalls },
     };
     const realWaitMs = liveCalls && scenario.realTimeWaits
       ? scenario.steps.reduce((total, step) => total + (step.type === "wait" ? step.seconds * MS_PER_SECOND : 0), 0)

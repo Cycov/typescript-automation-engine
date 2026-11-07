@@ -2,6 +2,7 @@
  * Test host — stands in for the main thread during a test run.
  * Service calls are recorded (and optionally applied to the simulated states);
  * with live calls they are also sent to Home Assistant. Storage lives in memory,
+ * published entities become simulated states (as Home Assistant would show them),
  * and every log, error and call lands on the test timeline.
  */
 
@@ -49,6 +50,21 @@ const ON_OFF_DOMAINS = new Set(["light", "switch", "fan", "input_boolean", "sire
 const VALUE_DOMAINS = new Set(["input_number", "number", "input_text", "text"]);
 const OPTION_DOMAINS = new Set(["input_select", "select"]);
 const NON_ATTRIBUTE_KEYS = new Set(["entity_id", "transition", "flash", "effect_list", "device_id", "area_id"]);
+const PUBLISHED_NAME_PREFIX = "TAE "; //< Home Assistant names published entities after the TAE device
+const MQTT_STATES: Record<string, string> = { ON: "on", OFF: "off", None: "unknown" }; //< payloads → HA states
+
+/**
+ * True when `actual` has every value of `expected`: objects compare key by key (extra keys are fine),
+ * arrays and plain values must be equal.
+ */
+export function matchesSubset(actual: any, expected: any): boolean {
+  if (expected === null || typeof expected !== "object") return actual === expected;
+  if (Array.isArray(expected)) {
+    return Array.isArray(actual) && actual.length === expected.length && expected.every((item, iItem) => matchesSubset(actual[iItem], item));
+  }
+  if (actual === null || typeof actual !== "object" || Array.isArray(actual)) return false;
+  return Object.entries(expected).every(([key, value]) => matchesSubset(actual[key], value));
+}
 
 /** Entity ids a service call targets (data.entity_id or data.target.entity_id). */
 export function serviceTargets(data: Record<string, any> | undefined): string[] {
@@ -156,15 +172,15 @@ export class TestHost implements WorkerHost {
     this.items.push({ at: this.now(), kind, text, ...(this.currentStep !== undefined ? { step: this.currentStep } : {}), ...extra });
   }
 
-  /** Change an entity as Home Assistant would report it, and dispatch the change. */
-  setState(entityId: string, state: string | undefined, attributes: Record<string, any> | undefined): HAEntityState {
+  /** Change an entity as Home Assistant would report it, and dispatch the change. replace: the attributes replace the old ones. */
+  setState(entityId: string, state: string | undefined, attributes: Record<string, any> | undefined, replace = false): HAEntityState {
     const before = this.states.get(entityId) ?? null;
     const nowIso = new Date().toISOString();
     const nextState = state ?? before?.state ?? "unknown";
     const after: HAEntityState = {
       entity_id: entityId,
       state: nextState,
-      attributes: { ...(before?.attributes || {}), ...(attributes || {}) },
+      attributes: replace ? { ...(attributes || {}) } : { ...(before?.attributes || {}), ...(attributes || {}) },
       last_changed: before && before.state === nextState ? before.last_changed : nowIso,
       last_updated: nowIso,
       context: EMPTY_CONTEXT,
@@ -172,6 +188,21 @@ export class TestHost implements WorkerHost {
     this.states.set(entityId, after);
     this.stateChangedHandler?.(entityId, before, after);
     return after;
+  }
+
+  /** Remove an entity, as Home Assistant does when its integration deletes it. */
+  removeState(entityId: string): void {
+    const before = this.states.get(entityId);
+    if (!before) return;
+    this.states.delete(entityId);
+    this.stateChangedHandler?.(entityId, before, null);
+  }
+
+  /** A TAE restart: temp storage is gone; persistent storage and states stay. */
+  restart(): void {
+    this.temp.clear();
+    this.eventHandlers.clear();
+    this.eventTypes.clear();
   }
 
   /** Deliver a Home Assistant event to every subscription for its type. */
@@ -195,9 +226,11 @@ export class TestHost implements WorkerHost {
       case "aiGenerate":
         return this.aiGenerate(args);
       case "publishEntity":
-        this.add("info", `${args.component}.${args.objectId} = ${args.state} (not published in tests)`, { automationId: args.automationId, detail: args });
+        this.publishEntity(args);
         return null;
       case "removeEntity":
+        this.add("info", `${args.component}.${args.objectId} removed (simulated)`, { automationId: args.automationId });
+        this.removeState(`${args.component}.${args.objectId}`);
         return null;
       case "getEntityState":
       case "fetchEntityState":
@@ -265,6 +298,24 @@ export class TestHost implements WorkerHost {
   sendTraceIgnored(_automationId: string, _at: number, _trigger: TraceTrigger): void {}
 
   // ─── Internal ───────────────────────────────────────────────
+
+  /** this.publish.*: the entity appears in the simulated states as Home Assistant would show it. */
+  private publishEntity(args: { automationId: string; component: string; objectId: string; options?: Record<string, any>; state: string; attributes?: Record<string, any> }): void {
+    const entityId = `${args.component}.${args.objectId}`;
+    const state = MQTT_STATES[args.state] ?? args.state;
+    const options = args.options ?? {};
+    const own: Record<string, any> = {
+      ...(options.name ? { friendly_name: `${PUBLISHED_NAME_PREFIX}${options.name}` } : {}),
+      ...(options.icon ? { icon: options.icon } : {}),
+      ...(options.unit ? { unit_of_measurement: options.unit } : {}),
+      ...(options.deviceClass ? { device_class: options.deviceClass } : {}),
+    };
+    // like MQTT: new attributes replace the old ones; none given keeps them
+    const previous = this.states.get(entityId);
+    const attributes = args.attributes ? { ...own, ...args.attributes } : { ...(previous?.attributes ?? {}), ...own };
+    this.setState(entityId, state, attributes, true);
+    this.add("info", `${entityId} = ${state} (published, simulated)`, { automationId: args.automationId, detail: args.attributes });
+  }
 
   private store(persistent: boolean): Map<string, any> {
     return persistent ? this.persistent : this.temp;

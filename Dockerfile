@@ -6,7 +6,7 @@ FROM ${BUILD_FROM}
 # the build tools better-sqlite3 needs when no prebuilt binary matches
 RUN sed -i 's/^musl=.*/musl/' /etc/apk/world \
     && apk upgrade --no-cache \
-    && apk add --no-cache nodejs npm python3 make g++
+    && apk add --no-cache nodejs npm python3 make g++ git
 
 # Set up working directory
 WORKDIR /app
@@ -44,6 +44,6 @@ LABEL \
     io.hass.name="TypeScript Automation Engine" \
     io.hass.description="Write and run Home Assistant automations in TypeScript" \
     io.hass.type="addon" \
-    io.hass.version="1.12.1"
+    io.hass.version="1.13.0"
 
 CMD ["/run.sh"]

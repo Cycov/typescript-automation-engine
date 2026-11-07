@@ -32,6 +32,7 @@ import { listModels } from "./ai/providers";
 import { EFFORT_LEVELS, EffortLevel, ProviderError } from "./ai/types";
 import { TypeChecker } from "./tools/type-check";
 import { ToolContext, buildEntityRows, getTools } from "./tools";
+import { WorkspaceGit } from "./workspace-git";
 import { startMcpServer } from "./mcp-server";
 import { FileHistory } from "./file-history";
 import { TestManager } from "./test-manager";
@@ -61,6 +62,8 @@ const OPTIONS_PATH = path.join(DATA_DIR, "options.json");
 
 let logLevel = "info";
 let syncPath = "/share/tae";
+const DEFAULT_GIT_MIRROR_PATH = "/share/tae.git";
+let gitMirrorPath = DEFAULT_GIT_MIRROR_PATH;
 let mcpTokenOption = "";
 let aiConfigFromOptions: AIOptions = { provider: "none", apiKey: "", model: "", completionModel: "" };
 
@@ -69,6 +72,8 @@ try {
     const options = JSON.parse(fs.readFileSync(OPTIONS_PATH, "utf-8"));
     logLevel = options.log_level || "info";
     syncPath = options.sync_path || "/share/tae";
+    const mirrorOption = typeof options.git_mirror_path === "string" ? options.git_mirror_path.trim() : DEFAULT_GIT_MIRROR_PATH;
+    gitMirrorPath = mirrorOption.toLowerCase() === "none" ? "" : mirrorOption; //< "" / "none" = no mirror
     mcpTokenOption = (options.mcp_token || "").trim();
     aiConfigFromOptions = {
       provider: PROVIDER_IDS.includes(options.ai_provider) ? options.ai_provider : "none",
@@ -99,6 +104,7 @@ const fileManager = new FileManager(AUTOMATIONS_PATH, syncPath, fileHistory);
 const aiSettings = new AISettings(storage, aiConfigFromOptions);
 const aiMemory = new AIMemory(storage);
 const typeChecker = new TypeChecker(AUTOMATIONS_PATH);
+const workspaceGit = new WorkspaceGit(AUTOMATIONS_PATH, gitMirrorPath, (level, message) => logger.log(level, "git", message));
 
 const haClient = new HAClient({
   supervisorToken: HA_TOKEN,
@@ -320,6 +326,7 @@ const toolContext: ToolContext = {
   typeChecker,
   testManager,
   fileHistory,
+  workspaceGit,
   memory: aiMemory,
   changeSource: "editor",
   getSkillMarkdown: () => skillMarkdown,
@@ -1058,6 +1065,7 @@ async function main(): Promise<void> {
     logger.log("info", "main", `Server listening on port ${PORT}${RESTRICT_TO_INGRESS ? " (ingress only)" : ""}`);
   });
   loadMcpHostPort().catch(() => {});
+  workspaceGit.init().catch(() => {});
   startMqtt().catch((err) => logger.log("warn", "mqtt", `MQTT setup failed: ${err?.message ?? err}`));
 
   // Connect to Home Assistant

@@ -184,7 +184,7 @@ const result = await this.callService(domain, service, data?, options?)
 await this.callService('light', 'turn_on', {
   entity_id: 'light.living_room',
   brightness: 200,
-  color_temp: 350,
+  color_temp_kelvin: 2850,
 });
 
 // Turn off multiple lights
@@ -560,8 +560,9 @@ The **Tests** tab (bottom panel) holds test scenarios for your automations. A te
 - the clock is simulated: a 10-minute wait finishes instantly, and timers in your code fire on the simulated clock
 - service calls are recorded, not sent, so no device reacts. With **Service calls change states**, `light.turn_on` makes the simulated light `on`, `cover.close_cover` makes the cover `closed`, and so on
 - storage writes stay inside the test, and network requests from automation code are blocked
+- published entities (`this.publish.*`) don't reach Home Assistant; they become simulated states
 
-Steps run in order: **Set state**, **Wait**, **Fire event**, **Expect state**, **Expect service call** and **Expect no service call** (a service check counts the calls since the previous service check). **Start at** sets the simulated time of day (for code that checks the hour), and **Automations** picks which automations start (by default the ones defined in the test's file).
+Steps run in order: **Set state**, **Wait**, **Fire event**, **Restart TAE**, **Expect state** and **Expect service call** / **Expect no service call**. A service check counts the calls since the previous service check; it can require data the call must contain (JSON) and an exact number of calls. **Expect state** can also require attributes. Entities your automations publish (`this.publish.*`) become simulated states, so they can be checked too. **Restart TAE** stops the automations and loads them again, as a real restart does: persistent storage, states and published entities stay, timers and temp storage are gone. **storage** under **Before start** sets persistent storage per automation before the run (`{ "MyAutomation": { "key": value } }`); automations not listed get a copy of their real storage. **Start at** sets the simulated time of day (for code that checks the hour), and **Automations** picks which automations start (by default the ones defined in the test's file).
 
 Tests are saved per file and keep their last result. **▶ This file** runs every test of the open file; the result shows each step, every service call and log line, with simulated times. **■ Stop** ends a running test. The AI chat and MCP clients can list, write and run tests too.
 
@@ -574,6 +575,10 @@ The **Timeline** tab shows what each automation did, newest first: what triggere
 ### File History
 
 Every save, AI edit, import, restore and delete is kept as a version, including changes made outside TAE (Samba, sync) the next time TAE writes the file. **🕘 History** shows the open file's versions: compare a version with the file now (**vs now**) or with the version before it (**what changed**), and **Restore** it. The 🕘 button in the Files header lists recent changes across all files, including deleted files. The last 200 versions per file are kept.
+
+### Workspace in Git
+
+The workspace is also a git repository (TAE installs git and commits the workspace as it is on first start). The file history above keeps every save; commits are named steps on top of it, made by the AI chat or an MCP client with `commit_changes` after a piece of work. Each commit is pushed to a bare mirror repository, by default `/share/tae.git`, so you can `git clone` it from another machine (over the SSH add-on: `git clone root@homeassistant.local:/share/tae.git`) to read the history with your own tools.
 
 ### File Saving Behavior
 
@@ -655,6 +660,7 @@ Click the **Work with AI** button in the toolbar to open a dialog for downloadin
 |------------|--------------|--------------------------------------------------|
 | `log_level`| `info`       | Minimum log level for **console output**: `debug`, `info`, `warn`, `error`. Note: all log levels are always visible in the UI regardless of this setting - the UI has its own level filter. |
 | `sync_path`| `/share/tae` | External directory for import/export sync        |
+| `git_mirror_path` | `/share/tae.git` | Bare git repository the workspace's commits are pushed to (clone it over SSH or Samba). Empty or `none` = no mirror |
 | `ai_provider`| `none`     | AI provider: `none`, `anthropic`, `openai`, `github` or `deepseek` |
 | `ai_api_key`| `""`        | API key or Personal Access Token for the AI provider |
 | `ai_model`| `""`         | Chat model. Empty = provider default (Anthropic: `claude-opus-5-5`, DeepSeek: `deepseek-chat`) |
@@ -700,6 +706,7 @@ The AI has tools instead of a fixed context dump. It can:
 
 - see what an automation did (`get_automation_timeline`), and write and run [tests](#tests) (`list_tests`, `save_test`, `run_test`)
 - look at and restore earlier versions of a file (`file_history`, `restore_file_version`)
+- review everything changed across files and commit it to the workspace's git history (`workspace_changes`, `commit_changes`, `workspace_log`)
 
 Anything that changes something (file edits, reloads, starting/stopping, service calls, saving tests) shows a preview - a diff for file edits - and waits for **Allow** / **Deny**. **Always allow** skips the question for that tool for the rest of the chat. Running tests needs no approval, since they never touch devices. Each message also tells the AI which file is open, any unsaved editor content, and your selection.
 
@@ -817,6 +824,14 @@ Snippet files are loaded automatically when TAE starts. After editing a `.snippe
 | Terminal command returns string error | Make sure to quote string arguments: `callService('light', 'turn_on', {entity_id: 'light.x'})` |
 
 ## Changelog
+
+### 1.13.0
+
+- **Feature**: tests check the data of a service call: `expect_service` takes `data` (the call's data must contain these values, nested objects too) and `count` (exactly this many calls). A mismatch says what the call sent instead
+- **Feature**: entities an automation publishes (`this.publish.*`) are simulated states in tests, so `expect_state` can check them (with `attributes` that must match) and other automations see them change
+- **Feature**: tests can restart TAE: a **Restart TAE** step stops the automations and loads them again; persistent storage, states and published entities stay, timers and temp storage are gone. A scenario's `storage` sets persistent storage per automation before the run (other automations get a copy of their real storage), to test what an automation does when it starts with something remembered
+- **Feature**: the workspace is a git repository. On first start TAE commits it as it is; MCP clients and the AI chat review a piece of work across files with `workspace_changes`, commit it with a message (`commit_changes`, optionally only some files) and read the history (`workspace_log`). Commits are mirrored to a bare repository, by default `/share/tae.git` (option `git_mirror_path`; `none` = no mirror), so it can be cloned over SSH or Samba
+- **Fix**: the API reference, README and JSDoc examples used the mired `color_temp`, which Home Assistant 2026.3 removed (it rejects such calls); they use `color_temp_kelvin` now, and the reference says so
 
 ### 1.12.1
 
