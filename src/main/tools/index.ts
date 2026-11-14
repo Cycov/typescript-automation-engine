@@ -772,7 +772,7 @@ const tools: TaeTool[] = [
     description:
       "Keep a short fact for later chats: what the user calls things, how rooms and devices are used, preferences, conventions, decisions. " +
       "One fact per note, with entity ids where they apply. Not for secrets, passing states or things the code already says.",
-    input: z.object({ text: z.string().max(MEMORY_NOTE_MAX_CHARS).describe("The fact, e.g. 'Sink light = light.shellyprodm2pm_ac151879bde4_light_1 (the mirror LED)'") }),
+    input: z.object({ text: z.string().max(MEMORY_NOTE_MAX_CHARS).describe("The fact, e.g. 'Sink light = light.bathroom_dimmer_channel_2 (the mirror LED)'") }),
     mutating: true,
     noApproval: true,
     run: async (input, ctx) => {
