@@ -1,16 +1,19 @@
 # TypeScript Automation Engine (TAE)
 
-Write and run Home Assistant automations in TypeScript with a managed runtime, built-in code editor, and real-time logging.
+Write and run Home Assistant automations in TypeScript, with a managed runtime, a built-in editor, tests that touch no device, and a tool set an AI can use to do the whole job: look up your entities, write the code, test it, reload it and read the logs.
 
 ## Features
 
 - **TypeScript automations** - Write automations in TypeScript with full type safety and autocomplete
 - **Worker thread isolation** - Automations run in a dedicated worker thread for clean reloads and fault isolation
 - **Built-in editor** - Monaco-based editor with TypeScript IntelliSense, syntax highlighting, and multi-tab support
-- **AI Friendly-ness** - Provides ai context files and since the language is typescipt, common AI assistants can make automations with ease
-- **Built-in AI integration** - Inline code completions and an AI chat that can look up entities, edit your files (each change approved by you), type-check, reload and read logs. Works with Anthropic (Claude), OpenAI, GitHub Models and DeepSeek
-- **MCP server** - Exposes the same tools to Claude Code and other MCP clients, so an AI on your computer can work on your automations
-- **Tests** - Simulated runs of your automations: set states, skip time, check what they call. No device is touched, and waits are instant
+- **Made for AI work** - Automations are ordinary TypeScript, which AI models write well, and TAE gives the AI what it needs to check its own work: entity search, a type checker, simulated tests, logs and a timeline. See [Working with AI](#working-with-ai)
+- **Built-in AI chat and completions** - An AI chat that looks up entities, edits your files (each change approved by you), type-checks, tests, reloads and reads logs, plus inline completions. Works with Anthropic (Claude), OpenAI, GitHub Models and DeepSeek
+- **MCP server** - The same 30 tools for Claude Code and other MCP clients, so an AI on your computer can build and maintain your automations
+- **AI text in automations** - `this.ai.generate()` writes spoken announcements, notification wording or summaries from inside an automation, with your provider and key
+- **Tests** - Simulated runs of your automations: set states, skip time, restart TAE, check what they call and with which data. No device is touched, and waits are instant
+- **Your own entities** - Automations publish sensors and binary sensors to Home Assistant over MQTT; TAE's status and a switch per automation show up there too
+- **Workspace in git** - The workspace is a git repository with a clonable mirror; secret files stay out of it
 - **Timeline** - What each automation did, run by run: trigger, service calls, logs, errors and timings
 - **File history** - Every save and AI edit is versioned; compare and restore any version, including deleted files
 - **Entity help in the editor** - Autocomplete and hover for entity ids, with a warning and quick fix for typos
@@ -39,6 +42,52 @@ Write and run Home Assistant automations in TypeScript with a managed runtime, b
 1. Open the TAE panel in your Home Assistant sidebar
 2. Edit `automations/index.ts` in the built-in editor
 3. Click **⟳ Reload** to apply changes
+
+## Working with AI
+
+TAE was built so that an AI assistant can do real automation work, not just suggest code for you to paste. Two things make that possible.
+
+**The automations are plain TypeScript.** One class per automation, a handful of methods (`subscribeToStateChangeEvent`, `callService`, `getEntityState`, timers, storage). There is no YAML dialect or template language to get subtly wrong, and anything code can do is available: state kept between events, shared helper functions, HTTP requests, parsing. Models are good at this kind of code.
+
+**The AI can check its own work.** A model that can only write code guesses at entity ids and can't tell whether its automation works. Through TAE's tools it can:
+
+| Step | Tools | Why it matters |
+|------|-------|----------------|
+| Learn the API | `get_api_reference` | The whole automation API with patterns and rules, in one call |
+| Know your home | `search_entities`, `get_entity`, `list_areas`, `list_services`, `get_memory` | Real entity ids, attributes and service fields instead of guesses; notes about what you call things |
+| Read and write code | `list_files`, `read_file`, `edit_file`, `write_file`, `delete_file` | Works in the workspace TAE runs |
+| Catch mistakes early | `type_check` | Compiler errors, plus entity ids that don't exist |
+| Prove behaviour | `save_test`, `run_test`, `list_tests`, `get_test` | Simulated states and clock: "off 3 minutes after motion clears" is checked in milliseconds, with no light switching |
+| Go live | `reload_automations`, `set_automation_state`, `list_automations` | Applies the code and shows what is running or in error |
+| See what happened | `get_logs`, `get_automation_timeline` | What triggered each run and what it called, for debugging real behaviour |
+| Keep a record | `workspace_changes`, `commit_changes`, `workspace_log`, `file_history`, `restore_file_version` | Reviewable diffs, named commits, and a way back |
+| Remember | `remember`, `update_memory`, `forget` | Notes that carry over to later chats |
+| Touch the real home | `call_service` | Only when you ask it to try something |
+
+So a request like "light the hallway strip on motion, dimmer after goodnight, and turn it off five seconds after the last sensor clears" becomes a loop the AI runs by itself: look up the sensors and the light, write the automation, type-check, write a test scenario and run it, fix what the test shows, reload, read the logs, commit.
+
+### What works well
+
+- **Rules with memory**: "who turned this light on", "has it been quiet for 20 minutes", "which room was the vacuum heading to". These are fields and timers in a class, where a YAML automation needs helper entities and several automations that have to agree.
+- **Behaviour that depends on time**: tests run on a simulated clock, so timeouts, delays and "only after 23:00" are checked instantly and repeatably. `startTime` sets the time of day; a **Restart TAE** step checks what survives a restart.
+- **Changing existing automations**: the AI reads the file, the tests saved with it and its history, changes it, and reruns the tests to see it didn't break what worked.
+- **Explaining**: ask why something happened and the AI reads the timeline and logs instead of speculating.
+- **Reasons kept with the code**: a file header saying what a rule is for and what was tried survives the chat that produced it. Ask the AI to write one; later sessions (and you) read it first.
+
+### What to know before relying on it
+
+- **Tests simulate Home Assistant, not your devices.** A test proves the automation makes the right calls. It can't show that a device accepts them, or how an integration behaves. Try new device actions once for real (a test with **Send calls to Home Assistant**, or `call_service`).
+- **AI calls are not made in tests**: `this.ai.generate` returns a placeholder there, and network requests from automation code are blocked.
+- **The built-in chat asks before every change; MCP does not.** Over MCP, your client's own permission prompts are the safety net (see below). `call_service` controls real devices either way.
+- **TAE's tools stop at the workspace.** They don't edit Home Assistant's own configuration (`configuration.yaml`, scripts, helpers). An automation that needs a new helper or script still needs you, or a client with other access, to add it.
+- **Everything runs in one add-on.** If TAE is stopped, its automations stop. TAE publishes `sensor.tae_status` to Home Assistant, so a short Home Assistant automation can tell you when that happens.
+- **AI use costs money** where your provider charges for it: the chat shows an estimate per reply, and `this.ai.generate` logs each request's cost and is limited to 30 an hour per automation.
+
+### Three ways to use it
+
+1. **The built-in chat** (🤖 AI in the editor): nothing to install, every change shown as a diff to allow or deny. See [AI Integration](#ai-integration).
+2. **Claude Code or another MCP client** on your computer: the same tools, with the client's larger context and its own approvals. Best for bigger pieces of work. See [MCP Server](#mcp-server-claude-code-and-other-ai-apps).
+3. **Any other assistant**: download the entity list and `SKILL.md` from **Work with AI** in the toolbar, give them to the assistant, and paste its code into the editor.
 
 ## Writing Automations
 
@@ -732,7 +781,16 @@ TAE serves the same tools over the [Model Context Protocol](https://modelcontext
 claude mcp add --transport http tae http://homeassistant.local:3201/mcp --header "Authorization: Bearer <token>"
 ```
 
-MCP clients also get `get_api_reference` (this repository's SKILL.md). Changes made through MCP are not approved in TAE - your MCP client (e.g. Claude Code's permission prompts) is responsible for that. The connection is plain HTTP: use it on your local network only. To turn it off, clear the `3201/tcp` port in the add-on's Network settings.
+The client then has every tool of the built-in chat (the table under [Working with AI](#working-with-ai)), plus `get_api_reference` (this repository's SKILL.md), which a client should read before writing automation code. The server's own instructions tell it so, and to look entities up instead of guessing ids.
+
+A session usually goes: `get_api_reference` and `get_memory` once, then for each piece of work `search_entities` → `read_file` / `edit_file` → `type_check` → `save_test` + `run_test` → `reload_automations` → `get_logs` → `commit_changes`. `commit_changes` takes `paths`, so the AI commits only its own files and leaves edits you made in the editor alone.
+
+Things to know:
+
+- **Approvals are the client's job.** Changes made through MCP are not approved in TAE: your MCP client (for example Claude Code's permission prompts) decides what runs without asking. `call_service` acts on real devices; `run_test` never does, even for tests marked to send calls.
+- **The token is the only protection** and the connection is plain HTTP: use it on your local network only, and treat the token like a password. A fixed one can be set with the `mcp_token` option.
+- **Secrets**: keep API keys in a `*-secret.ts` file. Such files stay out of the workspace's git history and its mirror; an MCP client can still read them with `read_file`, as it can any workspace file.
+- **Turning it off**: clear the `3201/tcp` port in the add-on's Network settings.
 
 ## Code Snippets
 
