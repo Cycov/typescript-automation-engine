@@ -14,6 +14,7 @@ import { EntityCatalog, buildEntityCatalog, editDistance } from "./entity-check"
 import { TestManager, testScenarioSchema } from "../test-manager";
 import { ChangeSource, FileHistory } from "../file-history";
 import { AIMemory, MEMORY_NOTE_MAX_CHARS } from "../ai/memory";
+import { Secrets } from "../secrets";
 import { WorkspaceGit } from "../workspace-git";
 import { AutomationInfo, HAEntityState, TraceInfo } from "../../shared/messages";
 import { TestResult, TestScenario } from "../../shared/tests";
@@ -52,6 +53,7 @@ export interface ToolContext {
   fileHistory: FileHistory;
   workspaceGit: WorkspaceGit;
   memory: AIMemory;
+  secrets: Secrets;
   /** Who is changing files, for the file history. */
   changeSource: ChangeSource;
   getSkillMarkdown: () => string;
@@ -818,6 +820,17 @@ const tools: TaeTool[] = [
     mutating: false,
     mcpOnly: true,
     run: async (_input, ctx) => ({ text: ctx.memory.promptBlock() }),
+  },
+  {
+    name: "list_secrets",
+    title: "List secret names",
+    description: "Names of the secrets (API keys, passwords) the user set in TAE's Secrets tab. Automations read one with getSecret('name') from 'tae'. Values are never shown; ask the user to add a missing secret in the Secrets tab.",
+    input: z.object({}),
+    mutating: false,
+    run: async (_input, ctx) => {
+      const names = ctx.secrets.names();
+      return { text: names.length ? names.join("\n") : "No secrets set. The user adds them in TAE's Secrets tab." };
+    },
   },
   {
     name: "save_test",

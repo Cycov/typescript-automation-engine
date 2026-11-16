@@ -54,6 +54,8 @@ const testHost = testSpec
   : null;
 const host: WorkerHost = testHost ?? bridge;
 const manager = new AutomationManager(host, data?.states ?? []);
+manager.setSecrets(data?.secrets ?? {});
+bridge.onSecrets((secrets) => manager.setSecrets(secrets));
 
 // Make manager available globally for the tae API module
 (global as any).__tae_automation_manager = manager;

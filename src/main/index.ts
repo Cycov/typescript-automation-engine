@@ -36,6 +36,7 @@ import { WorkspaceGit } from "./workspace-git";
 import { startMcpServer } from "./mcp-server";
 import { FileHistory } from "./file-history";
 import { TestManager } from "./test-manager";
+import { Secrets } from "./secrets";
 
 // ─── Configuration ──────────────────────────────────────────
 
@@ -103,6 +104,7 @@ const fileHistory = new FileHistory(storage.database);
 const fileManager = new FileManager(AUTOMATIONS_PATH, syncPath, fileHistory);
 const aiSettings = new AISettings(storage, aiConfigFromOptions);
 const aiMemory = new AIMemory(storage);
+const secrets = new Secrets(storage);
 const typeChecker = new TypeChecker(AUTOMATIONS_PATH);
 const workspaceGit = new WorkspaceGit(AUTOMATIONS_PATH, gitMirrorPath, (level, message) => logger.log(level, "git", message));
 
@@ -126,6 +128,9 @@ const testManager = new TestManager(haClient, storage, logger, {
   automationsPath: AUTOMATIONS_PATH,
   logLevel,
 });
+
+workerManager.setSecretsProvider(() => secrets.all());
+testManager.setSecretsProvider(() => secrets.all());
 
 const automationAI = new AutomationAI(aiSettings, logger);
 workerManager.setAIGenerator((request) => automationAI.generate(request));
@@ -328,6 +333,7 @@ const toolContext: ToolContext = {
   fileHistory,
   workspaceGit,
   memory: aiMemory,
+  secrets,
   changeSource: "editor",
   getSkillMarkdown: () => skillMarkdown,
   notifyFileChanged: (relativePath, content) => {
@@ -339,6 +345,11 @@ const toolContext: ToolContext = {
 
 const chatAgent = new ChatAgent(aiSettings, { ...toolContext, changeSource: "ai-chat" }, logger, storage, aiMemory);
 aiMemory.onChange(() => broadcast({ type: "ai_memory", data: aiMemory.state() }));
+
+secrets.onChange((values) => {
+  workerManager.secretsChanged();
+  broadcast({ type: "secrets", data: values });
+});
 
 workerManager.onReloaded(() => broadcast({ type: "reload_ack", success: true }));
 
@@ -825,6 +836,25 @@ wss.on("connection", (ws) => {
             sendJson({ type: "snippets", data: fileManager.readAllSnippets() });
           } catch (err: any) {
             sendJson({ type: "error", message: `Snippets error: ${err.message}` });
+          }
+          break;
+
+        // ─── Secrets ────────────────────────────────────────
+
+        case "secrets_get":
+          sendJson({ type: "secrets", data: secrets.all() });
+          break;
+
+        case "secrets_set":
+        case "secrets_delete":
+          try {
+            const name = String(msg.name ?? "").trim();
+            if (msg.type === "secrets_set") secrets.set(name, String(msg.value ?? ""));
+            else secrets.delete(name);
+            logger.log("info", "main", `Secret "${name}" ${msg.type === "secrets_set" ? "saved" : "deleted"}`);
+          } catch (err: any) {
+            sendJson({ type: "secrets_error", message: err.message });
+            sendJson({ type: "secrets", data: secrets.all() });
           }
           break;
 

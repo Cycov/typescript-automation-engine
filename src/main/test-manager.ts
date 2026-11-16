@@ -120,6 +120,7 @@ export class TestManager {
   private current: { scenarioId: string; stop: () => void } | null = null;
 
   private aiGenerator?: AIGenerator;
+  private secretsProvider: () => Record<string, string> = () => ({});
 
   constructor(haClient: HAClient, storage: Storage, logger: Logger, config: WorkerConfig) {
     this.haClient = haClient;
@@ -131,6 +132,11 @@ export class TestManager {
   /** Live runs answer this.ai.generate with the real AI. */
   setAIGenerator(generator: AIGenerator): void {
     this.aiGenerator = generator;
+  }
+
+  /** Where getSecret() values come from; tests see the real secrets. */
+  setSecretsProvider(provider: () => Record<string, string>): void {
+    this.secretsProvider = provider;
   }
 
   onRun(listener: (event: TestRunEvent) => void): () => void {
@@ -208,6 +214,7 @@ export class TestManager {
     const workerData: WorkerData = {
       config: this.config,
       states: initialStates(this.haClient.getAllStates(), scenario, startTimeMs),
+      secrets: this.secretsProvider(),
       test: { scenario, startTimeMs, storage: { ...this.storage.getAllPersistent(), ...(scenario.storage ?? {}) }, liveCalls },
     };
     const realWaitMs = liveCalls && scenario.realTimeWaits

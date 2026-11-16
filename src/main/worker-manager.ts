@@ -65,6 +65,7 @@ export class WorkerManager {
   private restartDelayMs = RESTART_DELAY_MIN_MS;
   private aiGenerator?: AIGenerator;
   private entityPublisher: MqttEntities | null = null;
+  private secretsProvider: () => Record<string, string> = () => ({});
   private spawnedAt = 0;
 
   constructor(
@@ -210,7 +211,7 @@ export class WorkerManager {
 
       this.logger.log("info", "worker-mgr", `Spawning worker thread: ${workerPath}`);
 
-      const workerData: WorkerData = { config: this.config, states: this.haClient.getAllStates() };
+      const workerData: WorkerData = { config: this.config, states: this.haClient.getAllStates(), secrets: this.secretsProvider() };
       const worker = new Worker(workerPath, { workerData });
       this.worker = worker;
       this.spawnedAt = Date.now();
@@ -424,6 +425,16 @@ export class WorkerManager {
 
   setAIGenerator(generator: AIGenerator): void {
     this.aiGenerator = generator;
+  }
+
+  /** Where getSecret() values come from. */
+  setSecretsProvider(provider: () => Record<string, string>): void {
+    this.secretsProvider = provider;
+  }
+
+  /** Hands changed secrets to the running automations. */
+  secretsChanged(): void {
+    this.sendToWorker({ type: "secrets", secrets: this.secretsProvider() });
   }
 
   /** Where automations' this.publish.sensor()/binarySensor() go; unset when MQTT isn't available. */

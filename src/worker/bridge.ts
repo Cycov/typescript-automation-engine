@@ -59,6 +59,7 @@ export class Bridge implements WorkerHost {
   private eventHandlers = new Map<string, EventHandler>(); // subId → handler
   private stateChangedHandler?: StateChangedHandler;
   private stateSnapshotHandler?: StateSnapshotHandler;
+  private secretsHandler?: (secrets: Record<string, string>) => void;
   private commandHandlers = new Map<string, (automationId: string) => void>();
   private shutdownHandler?: (reason: ShutdownReason) => void;
 
@@ -114,6 +115,11 @@ export class Bridge implements WorkerHost {
         break;
       }
 
+      case "secrets": {
+        this.secretsHandler?.(msg.secrets);
+        break;
+      }
+
       case "command": {
         const cmdHandler = this.commandHandlers.get(msg.command);
         if (cmdHandler) {
@@ -166,6 +172,11 @@ export class Bridge implements WorkerHost {
    */
   onStateSnapshot(handler: StateSnapshotHandler): void {
     this.stateSnapshotHandler = handler;
+  }
+
+  /** Register the handler for secrets changed in the Secrets tab. */
+  onSecrets(handler: (secrets: Record<string, string>) => void): void {
+    this.secretsHandler = handler;
   }
 
   /**

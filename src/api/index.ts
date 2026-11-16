@@ -150,6 +150,22 @@ export function getEntityState(entityId: string): HAEntityState | undefined {
 }
 
 /**
+ * A secret (API key, password) set in TAE's Secrets tab. Throws when there is no secret with that name.
+ * Read it when you use it, not into a top-level constant, so a changed value is picked up without a reload.
+ *
+ * @example
+ * const response = await fetch(url, { headers: { Authorization: `Bearer ${getSecret('meteoblue_api_key')}` } });
+ */
+export function getSecret(name: string): string {
+  return getManager().getSecret(name);
+}
+
+/** Whether a secret with this name is set in TAE's Secrets tab. */
+export function hasSecret(name: string): boolean {
+  return getManager().hasSecret(name);
+}
+
+/**
  * Fetch entity state live from HA API (fresh but slower).
  */
 export async function fetchEntityState(entityId: string): Promise<HAEntityState | undefined> {

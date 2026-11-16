@@ -14,6 +14,7 @@ Write and run Home Assistant automations in TypeScript, with a managed runtime, 
 - **Tests** - Simulated runs of your automations: set states, skip time, restart TAE, check what they call and with which data. No device is touched, and waits are instant
 - **Your own entities** - Automations publish sensors and binary sensors to Home Assistant over MQTT; TAE's status and a switch per automation show up there too
 - **Workspace in git** - The workspace is a git repository with a clonable mirror; secret files stay out of it
+- **Secrets** - API keys and passwords live in a Secrets tab, outside the workspace; automations read them with `getSecret('name')`
 - **Timeline** - What each automation did, run by run: trigger, service calls, logs, errors and timings
 - **File history** - Every save and AI edit is versioned; compare and restore any version, including deleted files
 - **Entity help in the editor** - Autocomplete and hover for entity ids, with a warning and quick fix for typos
@@ -482,6 +483,20 @@ await this.publish.binarySensor('rain_soon', { name: 'Rain soon' }).set(true);
 
 Options: `name`, `icon`, `unit`, `deviceClass`, `stateClass`, and `device`: a device name (e.g. `'e-bloc'`) that puts the entity under a device of its own instead of **TAE**; entities with the same name share it. This needs the **Mosquitto broker** app; TAE finds it on its own. Without it, `set()` rejects and explains what's missing.
 
+### Secrets
+
+The **Secrets** tab in the bottom panel keeps API keys and passwords as name → value pairs. They are stored in TAE's database, outside the workspace, so they never reach its git history or the `/share` mirror.
+
+```typescript
+import { getSecret, hasSecret } from 'tae';
+
+const response = await fetch('https://api.example.com/data', {
+  headers: { Authorization: `Bearer ${getSecret('example_api_key')}` },
+});
+```
+
+`getSecret(name)` returns the value and throws when there is no secret with that name; `hasSecret(name)` checks. Read a secret where you use it rather than into a top-level constant: a value changed in the tab reaches running automations right away, without a reload. Tests see the same secrets.
+
 ### TAE in Home Assistant
 
 With the Mosquitto broker app installed, TAE also shows itself in HA under the **TAE** device:
@@ -789,7 +804,7 @@ Things to know:
 
 - **Approvals are the client's job.** Changes made through MCP are not approved in TAE: your MCP client (for example Claude Code's permission prompts) decides what runs without asking. `call_service` acts on real devices; `run_test` never does, even for tests marked to send calls.
 - **The token is the only protection** and the connection is plain HTTP: use it on your local network only, and treat the token like a password. A fixed one can be set with the `mcp_token` option.
-- **Secrets**: keep API keys in a `*-secret.ts` file. Such files stay out of the workspace's git history and its mirror; an MCP client can still read them with `read_file`, as it can any workspace file.
+- **Secrets**: keep API keys in the **Secrets** tab. An MCP client sees their names (`list_secrets`), not their values. It can still write automation code, and code can read any secret, so this keeps values out of files and chats rather than away from a client you don't trust. A `*-secret.ts` file stays out of the workspace's git history, but `read_file` returns it like any workspace file.
 - **Turning it off**: clear the `3201/tcp` port in the add-on's Network settings.
 
 ## Code Snippets
@@ -887,6 +902,7 @@ Snippet files are loaded automatically when TAE starts. After editing a `.snippe
 
 ### 1.14.0
 
+- **Feature**: a **Secrets** tab (bottom panel) keeps API keys and passwords as name → value pairs, outside the workspace and its git history. Automations read one with `getSecret('name')` (`hasSecret` checks); a changed value reaches running automations without a reload. The AI and MCP clients see the names only (`list_secrets`)
 - **Feature**: published entities can have their own device: `this.publish.sensor(id, { device: 'e-bloc', ... })` puts the entity under an **e-bloc** device (linked to TAE) instead of the TAE device; entities with the same `device` name share it
 
 ### 1.13.1

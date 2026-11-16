@@ -1259,7 +1259,24 @@
 
     /* ─── Tests panel ───────────────────────────────── */
     .bottom-panel.collapsed .tests-area,
+    .bottom-panel.collapsed .secrets-area,
     .bottom-panel.collapsed .timeline-area { display: none !important; }
+
+    /* ─── Secrets panel ─────────────────────────────── */
+    .secrets-area { flex: 1; flex-direction: column; overflow-y: auto; min-height: 0; padding: 8px 12px; font-size: 12px; }
+    .secrets-hint { color: var(--text-dim); line-height: 1.6; margin-bottom: 8px; }
+    .secrets-hint code { color: var(--text); }
+    .secrets-row { display: flex; align-items: center; gap: 6px; padding: 3px 0; max-width: 760px; }
+    .secrets-row .secrets-name { width: 220px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono, monospace); }
+    .secrets-row input {
+      background: var(--bg-input); color: var(--text); border: 1px solid var(--border); border-radius: 4px;
+      padding: 3px 6px; font-family: inherit; font-size: 12px; outline: none; min-width: 0;
+    }
+    .secrets-row input:focus { border-color: var(--accent); }
+    .secrets-row input.secrets-name { flex: 0 0 220px; }
+    .secrets-row .secrets-value { flex: 1; }
+    .secrets-new { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--bg-tertiary); }
+    .secrets-error { color: var(--red); font-size: 11px; min-height: 14px; margin-top: 4px; }
     .panel-badge { font-size: 10px; margin-left: 4px; color: var(--red); }
     .panel-badge.ok { color: var(--green); }
     .tests-area, .timeline-area { flex: 1; display: flex; overflow: hidden; min-height: 0; }
@@ -1544,6 +1561,7 @@
             <div class="panel-tab" data-panel="terminal" onclick="switchPanel('terminal')">Terminal</div>
             <div class="panel-tab" data-panel="tests" onclick="switchPanel('tests')" title="Simulated test runs of your automations">Tests<span class="panel-badge" id="testsBadge"></span></div>
             <div class="panel-tab" data-panel="timeline" onclick="switchPanel('timeline')" title="What each automation did, run by run">Timeline</div>
+            <div class="panel-tab" data-panel="secrets" onclick="switchPanel('secrets')" title="API keys and passwords your automations read with getSecret('name')">Secrets</div>
           </div>
           <div class="log-filters" id="logFilters">
             <button class="autoscroll-btn active" id="autoscrollBtn" onclick="toggleAutoScroll()" title="Auto-scroll to latest log">⤓ Auto</button>
@@ -1584,6 +1602,16 @@
           <div class="tests-editor" id="testsEditor"></div>
           <div class="tests-result-resize"><div class="col-resize" id="testsResultResize" title="Drag to resize"></div></div>
           <div class="tests-result" id="testsResult"></div>
+        </div>
+        <div class="secrets-area" id="secretsArea" style="display:none;">
+          <div class="secrets-hint">API keys and passwords for your automations. Read one in code with <code>getSecret('name')</code> (import it from <code>'tae'</code>). They are kept outside the workspace, so they never reach its git history; the AI sees the names, not the values.</div>
+          <div id="secretsList"></div>
+          <div class="secrets-row secrets-new">
+            <input type="text" class="secrets-name" id="secretsNewName" placeholder="name, e.g. ebloc_password" spellcheck="false" autocomplete="off" onkeydown="if (event.key === 'Enter') addSecret()">
+            <input type="password" class="secrets-value" id="secretsNewValue" placeholder="value" spellcheck="false" autocomplete="new-password" onkeydown="if (event.key === 'Enter') addSecret()">
+            <button class="btn btn-accent" onclick="addSecret()">Add</button>
+          </div>
+          <div class="secrets-error" id="secretsError"></div>
         </div>
         <div class="timeline-area" id="timelineArea" style="display:none;">
           <div class="timeline-automations" id="timelineAutomations"></div>
@@ -2157,6 +2185,12 @@ supported_features: 40"></textarea>
           break;
         case 'tests':
           handleTests(msg.data);
+          break;
+        case 'secrets':
+          handleSecrets(msg.data);
+          break;
+        case 'secrets_error':
+          showSecretsError(msg.message);
           break;
         case 'test_saved':
           handleTestSaved(msg);
@@ -3690,6 +3724,7 @@ supported_features: 40"></textarea>
       document.getElementById('terminalArea').style.display = panel === 'terminal' ? 'flex' : 'none';
       document.getElementById('testsArea').style.display = panel === 'tests' ? 'flex' : 'none';
       document.getElementById('timelineArea').style.display = panel === 'timeline' ? 'flex' : 'none';
+      document.getElementById('secretsArea').style.display = panel === 'secrets' ? 'flex' : 'none';
       document.getElementById('logFilters').style.display = panel === 'logs' ? '' : 'none';
       if (panel === 'tests') {
         ensureBottomPanelHeight(TEST_PANEL_MIN_HEIGHT);
@@ -3701,11 +3736,107 @@ supported_features: 40"></textarea>
         ensureBottomPanelHeight(TIMELINE_PANEL_MIN_HEIGHT);
         renderTimeline();
       }
+      if (panel === 'secrets') {
+        showSecretsError('');
+        send({ type: 'secrets_get' });
+      }
       if (panel === 'terminal') {
         document.getElementById('terminalInput').focus();
         // Request entities for autocomplete if not loaded
         if (cachedEntityIds.length === 0) send({ type: 'get_all_entities' });
       }
+    }
+
+    // ─── Secrets ─────────────────────────────────────
+    let secretValues = {};
+    let secretsRenderPending = false;
+
+    function handleSecrets(values) {
+      secretValues = values || {};
+      const active = document.activeElement;
+      if (active && active.closest && active.closest('#secretsList')) {
+        secretsRenderPending = true; //< don't replace what is being typed
+        return;
+      }
+      renderSecrets();
+    }
+
+    function showSecretsError(message) {
+      document.getElementById('secretsError').textContent = message || '';
+    }
+
+    function renderSecrets() {
+      secretsRenderPending = false;
+      const list = document.getElementById('secretsList');
+      list.innerHTML = '';
+      const names = Object.keys(secretValues).sort((left, right) => left.localeCompare(right));
+      for (const name of names) {
+        const row = document.createElement('div');
+        row.className = 'secrets-row';
+
+        const label = document.createElement('span');
+        label.className = 'secrets-name';
+        label.textContent = name;
+        label.title = "getSecret('" + name + "')";
+
+        const input = document.createElement('input');
+        input.type = 'password';
+        input.className = 'secrets-value';
+        input.value = secretValues[name];
+        input.spellcheck = false;
+        input.autocomplete = 'new-password';
+        input.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter') input.blur();
+          else if (event.key === 'Escape') { event.stopPropagation(); input.value = secretValues[name]; input.blur(); }
+        });
+        input.addEventListener('blur', () => {
+          if (input.value && input.value !== secretValues[name]) {
+            showSecretsError('');
+            send({ type: 'secrets_set', name, value: input.value });
+          } else {
+            input.value = secretValues[name] ?? '';
+          }
+          if (secretsRenderPending) setTimeout(() => { if (!document.activeElement || !document.activeElement.closest('#secretsList')) renderSecrets(); }, 0);
+        });
+
+        const reveal = document.createElement('button');
+        reveal.className = 'row-btn';
+        reveal.textContent = '👁';
+        reveal.title = 'Show or hide the value';
+        reveal.addEventListener('click', () => { input.type = input.type === 'password' ? 'text' : 'password'; });
+
+        const remove = document.createElement('button');
+        remove.className = 'row-btn danger';
+        remove.textContent = '✕';
+        remove.title = 'Delete this secret';
+        remove.addEventListener('click', () => {
+          if (!confirm('Delete the secret "' + name + '"? Automations that read it will fail.')) return;
+          showSecretsError('');
+          send({ type: 'secrets_delete', name });
+        });
+
+        row.append(label, input, reveal, remove);
+        list.appendChild(row);
+      }
+    }
+
+    function addSecret() {
+      const nameInput = document.getElementById('secretsNewName');
+      const valueInput = document.getElementById('secretsNewValue');
+      const name = nameInput.value.trim();
+      if (!name || !valueInput.value) {
+        showSecretsError('Enter a name and a value.');
+        return;
+      }
+      if (name in secretValues) {
+        showSecretsError('There is already a secret named "' + name + '"; change its value in the list.');
+        return;
+      }
+      showSecretsError('');
+      send({ type: 'secrets_set', name, value: valueInput.value });
+      nameInput.value = '';
+      valueInput.value = '';
+      nameInput.focus();
     }
 
     // ─── Terminal ────────────────────────────────────

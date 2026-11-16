@@ -41,6 +41,7 @@ export type MainToWorkerMessage =
   | { type: "event"; subId: string; data: any }
   | { type: "stateChanged"; entityId: string; oldState: HAEntityState | null; newState: HAEntityState | null }
   | { type: "stateSnapshot"; states: HAEntityState[] }
+  | { type: "secrets"; secrets: Record<string, string> }
   | { type: "command"; command: "stopAutomation" | "startAutomation"; automationId: string }
   | { type: "shutdown"; reason: ShutdownReason };
 
@@ -68,6 +69,8 @@ export interface WorkerConfig {
 export interface WorkerData {
   config: WorkerConfig;
   states: HAEntityState[];
+  /** Secrets from the Secrets tab, for getSecret(). */
+  secrets?: Record<string, string>;
   /** Present for a test run: isolated, simulated clock, no Home Assistant access. */
   test?: TestRunSpec;
 }

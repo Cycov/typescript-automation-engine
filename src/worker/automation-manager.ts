@@ -76,6 +76,7 @@ export class AutomationManager {
   private subscriptions = new Map<string, SubscriptionInfo[]>(); // automationId → subs
   private stateSubscriptions = new Map<string, StateSubscription>(); // subId → subscription
   private stateCache = new Map<string, HAEntityState>();
+  private secrets = new Map<string, string>();
   private traceContext = new AsyncLocalStorage<ActiveTrace>();
   private tracing = false;
   private startFilter: Set<string> | null = null;
@@ -323,6 +324,20 @@ export class AutomationManager {
   }
 
   /** Read an entity from the worker's local state copy. */
+  setSecrets(secrets: Record<string, string>): void {
+    this.secrets = new Map(Object.entries(secrets));
+  }
+
+  hasSecret(name: string): boolean {
+    return this.secrets.has(name);
+  }
+
+  getSecret(name: string): string {
+    const value = this.secrets.get(name);
+    if (value === undefined) throw new Error(`Secret "${name}" is not set: add it in TAE's Secrets tab`);
+    return value;
+  }
+
   getEntityStateSync(entityId: string): HAEntityState | undefined {
     return this.stateCache.get(entityId);
   }

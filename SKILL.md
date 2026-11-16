@@ -248,6 +248,20 @@ HA API functions take the automation instance as first arg: `callService(auto, '
 Standalone state access (no automation arg needed): `getEntityState('light.bedroom')`, `await fetchEntityState('sensor.temp')`.
 Standalone logging logs with source `"user"`: `log('message')`, `debug('detail')`.
 
+### Secrets: `getSecret(name)` / `hasSecret(name)`
+API keys and passwords the user set in TAE's **Secrets** tab (name → value). They live outside the workspace, so they
+never reach its git history or the `/share` mirror. `getSecret` returns the value and **throws** when there is no
+secret with that name; `hasSecret` checks. Read a secret where you use it (not into a top-level constant), so a value
+changed in the tab is picked up without a reload. The `list_secrets` tool shows the names; never ask for or print values.
+
+```typescript
+import { getSecret } from 'tae';
+
+const response = await fetch('https://api.example.com/data', {
+  headers: { Authorization: `Bearer ${getSecret('example_api_key')}` },
+});
+```
+
 ### Lifecycle Hooks
 
 | Hook         | When Called                              | Use For                              |
@@ -623,8 +637,9 @@ restart when the automation keeps something in persistent storage.
 - Use guard clauses (`if (condition) return;`) to keep callbacks clean
 - Use `color_temp_kelvin` for white light temperature — Home Assistant 2026.3 removed the mired `color_temp` (and
   `kelvin`) keys from `light.turn_on`, and rejects calls that still send them
-- Put API keys, passwords and tokens in their own file named `*-secret.ts` (e.g. `weather/meteoblue-secret.ts`
-  exporting a constant) and import it: such files stay out of the workspace's git history and its `/share` mirror
+- Keep API keys, passwords and tokens in TAE's **Secrets** tab and read them with `getSecret('name')`; never write
+  them into a workspace file. (Files named `*-secret.ts` also stay out of the workspace's git history, for constants
+  that are not a single value)
 
 ### Don't:
 - Don't forget to export `onInit()` from `index.ts` — nothing runs without it; `onInit()` in other files is never called
@@ -680,6 +695,7 @@ import {
   getEntityState,                  // Read entity state from TAE's local copy (sync)
   fetchEntityState,                // Fetch one entity from HA API (async)
   getAutomations,                  // Registered automations: [{ id, className, state }]
+  getSecret, hasSecret,            // Secrets set in TAE's Secrets tab
   log, warn, error, debug,         // Standalone logging
   LogLevel,                        // LogLevel.Debug, .Info, .Warn, .Error
   // Types (for type annotations):

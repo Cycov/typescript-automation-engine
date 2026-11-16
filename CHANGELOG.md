@@ -2,6 +2,7 @@
 
 ## 1.14.0
 
+- **Feature**: a **Secrets** tab (bottom panel) keeps API keys and passwords as name → value pairs, outside the workspace and its git history. Automations read one with `getSecret('name')` (`hasSecret` checks); a changed value reaches running automations without a reload. The AI and MCP clients see the names only (`list_secrets`)
 - **Feature**: published entities can have their own device: `this.publish.sensor(id, { device: 'e-bloc', ... })` puts the entity under an **e-bloc** device (linked to TAE) instead of the TAE device; entities with the same `device` name share it
 
 ## 1.13.1
