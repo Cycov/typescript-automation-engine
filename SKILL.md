@@ -211,7 +211,8 @@ explanation when MQTT isn't available. `objectId`: lowercase letters, digits and
 
 | Option        | Description |
 |---------------|-------------|
-| `name`        | Shown name (HA shows "TAE <name>") |
+| `name`        | Shown name (HA shows "<device> <name>") |
+| `device`      | Device to put the entity under, e.g. `"e-bloc"`; entities with the same name share it. Default: the **TAE** device |
 | `icon`        | MDI icon, e.g. `"mdi:weather-partly-cloudy"` |
 | `unit`        | Unit of measurement, e.g. `"°C"` (sensors) |
 | `deviceClass` | HA device class, e.g. `"temperature"`, `"door"` |
@@ -223,6 +224,9 @@ await forecast.set(8.5, { source: 'meteoblue' });   // state (null = unknown) + 
 await this.publish.binarySensor('rain_soon', { name: 'Rain soon' }).set(true);
 await forecast.remove();                              // delete it from HA
 ```
+
+Give the entities of one service or thing their own device: `this.publish.sensor('ebloc_amount_due', { device: 'e-bloc', name: 'Amount due', unit: 'RON' })`
+shows as "e-bloc Amount due" under an **e-bloc** device (linked to TAE). The entity id is still `sensor.<objectId>`.
 
 Keep attributes under ~16 KB (HA's history skips bigger ones). In tests nothing reaches Home Assistant: a published
 entity becomes a simulated state (`binary_sensor.<objectId>` is `on`/`off`, a sensor's `null` is `unknown`), so

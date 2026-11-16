@@ -480,7 +480,7 @@ await forecast.set(8.5, { source: 'meteoblue' });   // state (null = unknown) + 
 await this.publish.binarySensor('rain_soon', { name: 'Rain soon' }).set(true);
 ```
 
-Options: `name`, `icon`, `unit`, `deviceClass`, `stateClass`. This needs the **Mosquitto broker** app; TAE finds it on its own. Without it, `set()` rejects and explains what's missing.
+Options: `name`, `icon`, `unit`, `deviceClass`, `stateClass`, and `device`: a device name (e.g. `'e-bloc'`) that puts the entity under a device of its own instead of **TAE**; entities with the same name share it. This needs the **Mosquitto broker** app; TAE finds it on its own. Without it, `set()` rejects and explains what's missing.
 
 ### TAE in Home Assistant
 
@@ -884,6 +884,10 @@ Snippet files are loaded automatically when TAE starts. After editing a `.snippe
 | Terminal command returns string error | Make sure to quote string arguments: `callService('light', 'turn_on', {entity_id: 'light.x'})` |
 
 ## Changelog
+
+### 1.14.0
+
+- **Feature**: published entities can have their own device: `this.publish.sensor(id, { device: 'e-bloc', ... })` puts the entity under an **e-bloc** device (linked to TAE) instead of the TAE device; entities with the same `device` name share it
 
 ### 1.13.1
 

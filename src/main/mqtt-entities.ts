@@ -9,6 +9,8 @@ import { Logger } from "./logging";
 
 const DISCOVERY_PREFIX = "homeassistant";
 const BASE_TOPIC = "tae";
+const TAE_DEVICE_ID = "typescript_automation_engine";
+const TAE_DEVICE_NAME = "TAE";
 const AVAILABILITY_TOPIC = `${BASE_TOPIC}/availability`;
 const HA_STATUS_TOPIC = `${DISCOVERY_PREFIX}/status`; //< HA's birth message: republish when it comes back
 const SUPERVISOR_MQTT_URL = "http://supervisor/services/mqtt";
@@ -27,6 +29,7 @@ export interface EntityDefinition {
   unit?: string;
   deviceClass?: string;
   stateClass?: string;
+  device?: string; //< name of its own device in HA (none = the TAE device)
   owner?: string; //< automation id that publishes it (none = TAE itself)
 }
 
@@ -173,6 +176,14 @@ export class MqttEntities {
     return `${BASE_TOPIC}/${component}/${objectId}/${suffix}`;
   }
 
+  /** The TAE device, or a device of its own (linked to TAE) for entities published with a `device` name. */
+  private device(name?: string): Record<string, unknown> {
+    const common = { manufacturer: "TypeScript Automation Engine", sw_version: this.version };
+    const slug = name?.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+    if (!slug || slug === BASE_TOPIC) return { identifiers: [TAE_DEVICE_ID], name: TAE_DEVICE_NAME, model: "Automations", ...common };
+    return { identifiers: [`${BASE_TOPIC}_device_${slug}`], name: name!.trim(), model: "Published by automations", via_device: TAE_DEVICE_ID, ...common };
+  }
+
   private publishDiscovery(definition: EntityDefinition): void {
     if (!this.client?.connected) return; //< sent on connect
     const { component, objectId } = definition;
@@ -183,13 +194,7 @@ export class MqttEntities {
       state_topic: this.topic(component, objectId, "state"),
       json_attributes_topic: this.topic(component, objectId, "attributes"),
       availability_topic: AVAILABILITY_TOPIC,
-      device: {
-        identifiers: ["typescript_automation_engine"],
-        name: "TAE",
-        manufacturer: "TypeScript Automation Engine",
-        model: "Automations",
-        sw_version: this.version,
-      },
+      device: this.device(definition.device),
       origin: { name: "TypeScript Automation Engine", sw_version: this.version },
     };
     if (definition.icon) config.icon = definition.icon;

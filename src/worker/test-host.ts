@@ -50,7 +50,7 @@ const ON_OFF_DOMAINS = new Set(["light", "switch", "fan", "input_boolean", "sire
 const VALUE_DOMAINS = new Set(["input_number", "number", "input_text", "text"]);
 const OPTION_DOMAINS = new Set(["input_select", "select"]);
 const NON_ATTRIBUTE_KEYS = new Set(["entity_id", "transition", "flash", "effect_list", "device_id", "area_id"]);
-const PUBLISHED_NAME_PREFIX = "TAE "; //< Home Assistant names published entities after the TAE device
+const PUBLISHED_DEVICE_NAME = "TAE"; //< Home Assistant names published entities after their device
 const MQTT_STATES: Record<string, string> = { ON: "on", OFF: "off", None: "unknown" }; //< payloads → HA states
 
 /**
@@ -305,7 +305,7 @@ export class TestHost implements WorkerHost {
     const state = MQTT_STATES[args.state] ?? args.state;
     const options = args.options ?? {};
     const own: Record<string, any> = {
-      ...(options.name ? { friendly_name: `${PUBLISHED_NAME_PREFIX}${options.name}` } : {}),
+      ...(options.name ? { friendly_name: `${options.device?.trim() || PUBLISHED_DEVICE_NAME} ${options.name}` } : {}),
       ...(options.icon ? { icon: options.icon } : {}),
       ...(options.unit ? { unit_of_measurement: options.unit } : {}),
       ...(options.deviceClass ? { device_class: options.deviceClass } : {}),

@@ -84,8 +84,10 @@ export interface AutomationAI {
 
 /** How a published entity looks in Home Assistant. All optional. */
 export interface PublishedEntityOptions {
-  /** Shown name; defaults to the device name "TAE". HA shows it as "TAE <name>". */
+  /** Shown name; defaults to the device name. HA shows it as "<device> <name>". */
   name?: string;
+  /** Device the entity belongs to in HA, e.g. "e-bloc"; entities with the same name share it. Default: the "TAE" device. */
+  device?: string;
   /** MDI icon, e.g. "mdi:weather-partly-cloudy". */
   icon?: string;
   /** Unit of measurement, e.g. "°C" or "W" (sensors). */

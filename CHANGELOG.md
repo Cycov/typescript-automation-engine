@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.14.0
+
+- **Feature**: published entities can have their own device: `this.publish.sensor(id, { device: 'e-bloc', ... })` puts the entity under an **e-bloc** device (linked to TAE) instead of the TAE device; entities with the same `device` name share it
+
 ## 1.13.1
 
 - **Fix**: secret files stay out of the workspace's git history. 1.13.0 committed every file, so API keys kept in a workspace file ended up in the `/share/tae.git` mirror, which anyone with access to `/share` can read. Files named `*-secret.ts`, `*.secret.ts` or `secrets.ts` are now in `.gitignore`, and on start TAE removes any that are already in the history from every commit (authors, dates and messages stay) and prunes them from the mirror. The files themselves stay in the workspace
